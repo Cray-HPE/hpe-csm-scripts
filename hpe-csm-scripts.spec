@@ -26,9 +26,6 @@ Installs several scripts that are useful for various purposes such as troublesho
 
 %build
 
-
-make build
-
 %install
 install -m 755 -d %{buildroot}%{install_dir}/
 cp -r scripts %{buildroot}%{install_dir}/
