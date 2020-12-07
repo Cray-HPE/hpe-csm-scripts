@@ -1,0 +1,137 @@
+#! /bin/bash
+
+set -e
+
+list_hsm_nodes() {
+    cray hsm state components list \
+         --type node \
+         --role management \
+         --subrole $1 \
+         --format json | jq -r .Components[].ID
+}
+
+list_uai_nodes() {
+    kubectl get nodes \
+            --selector "uas notin (false, False, FALSE)" \
+        | grep -v -e ' master ' -e '^NAME ' \
+        | awk '{ print $1 }'
+}
+
+index_to_xname() {
+    filter=".[] | select(.ExtraProperties.Aliases | index(\"${1}\")) | .Xname"
+    cray sls search hardware list \
+         --type comptype_node \
+         --format=json \
+        | jq -r "${filter}"
+}
+
+create_group() {
+    ${CRAY} hsm groups create --label ${1}
+}
+
+delete_group() {
+    ${CRAY} hsm groups delete ${1}
+}
+
+add_member() {
+    ${CRAY} hsm groups members create ${1} --id ${2}
+}
+
+build_group() {
+    list_cmd="${2}"
+    if [ -n "$replace_previous" ]; then
+        delete_group ${1} || true # Ignore errors here
+    fi
+    ${CRAY} hsm groups create --label ${1}
+    for ncn in $(${list_cmd})
+    do
+        add_member ${1} ${ncn}
+    done
+}
+usage() {
+    (
+        echo "usage: make_node_groups [-m][-s][-u][w][-A][-R][-N]"
+        echo "Where:"
+        echo "  -m - creates a node group for managment master nodes"
+        echo ""
+        echo "  -s - creates a node group for management storage nodes"
+        echo ""
+        echo "  -u - creates a node group for UAI worker nodes"
+        echo ""
+        echo "  -w - creates a node group for management worker nodes"
+        echo ""
+        echo "  -A - creates all of the above node groups"
+        echo ""
+        echo "  -N - executes a dry run, showing commands not running them"
+        echo ""
+        echo "  -R - deletes existing node group(s) before creating them"
+    ) >&2
+    exit 2
+}
+
+make_master=""
+make_worker=""
+make_storage=""
+make_uai=""
+replace_previous=""
+: ${CRAY:="cray"}
+
+if ! args=$(getopt msuwANR $*)
+then
+    usage
+fi
+set -- ${args}
+for opt
+do
+    case "${opt}"
+    in
+        -m)
+            # Master node group
+            make_master=y
+            shift;;
+        -s)
+            # Storage node group
+            make_storage=y
+            shift;;
+        -w)
+            # Worker node group
+            make_worker=y
+            shift;;
+        -u)
+            # UAI Node Group
+            make_uai=y
+            shift;;
+        -A)
+            # All node groups
+            make_master=y
+            make_worker=y
+            make_storage=y
+            make_uai=y
+            shift;;
+        -N)
+            # Dry run only, show commands but do not change anything
+            CRAY="echo (dry run)cray"
+            shift;;
+        -R)
+            # Replace any existing group(s)
+            replace_previous=y
+            shift;;
+        --)
+            shift; break;;
+    esac
+done
+
+if [ -n "${make_master}" ]; then
+    build_group master "list_hsm_nodes master"
+fi
+if [ -n "${make_worker}" ]; then
+    build_group worker "list_hsm_nodes worker"
+fi
+if [ -n "${make_storage}" ]; then
+    build_group storage "list_hsm_nodes storage"
+fi
+if [ -n "${make_uai}" ]; then
+    uai_list="$(for ncn in $(list_uai_nodes); do index_to_xname ${ncn}; done)"
+    build_group uai "echo ${uai_list}"
+fi
+exit 0
