@@ -1,6 +1,6 @@
 // Copyright 2020 Hewlett Packard Enterprise Development LP
 
-@Library("dst-shared") _
+@Library("dst-shared@release/shasta-1.4") _
 
 rpmBuild(
     specfile: "hpe-csm-scripts.spec",
@@ -10,3 +10,4 @@ rpmBuild(
     target_node: "ncn",
     slack_notify : ['', 'SUCCESS', 'FAILURE', 'FIXED']
 )
+
