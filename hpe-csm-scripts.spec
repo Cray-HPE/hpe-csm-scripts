@@ -7,8 +7,8 @@
 %define install_dir /opt/cray/csm
 
 Requires: bash
-Requires: jq    # For make_node_groups
-Requires: craycli-wrapper # For make_node_groups
+Requires: craycli-wrapper
+Requires: jq
 
 BuildArch: noarch
 
