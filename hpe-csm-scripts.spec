@@ -10,26 +10,26 @@ Requires: bash
 Requires: craycli-wrapper
 Requires: jq
 
-BuildArch: noarch
-
 Name: hpe-csm-scripts
+BuildArch: noarch
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}
 License: HPE Proprietary
-Summary: Installs several scripts that are useful for various purposes such as troubleshooting
+Summary: Installs helper scripts for trouble-shooting or triage.
 Version: %(cat .version)
 Release: %(echo ${BUILD_METADATA})
 Source: %{name}-%{version}.tar.bz2
 Vendor: Hewlett Packard Enterprise Development LP
 
 %description
-Installs several scripts that are useful for various purposes such as troubleshooting.
 
 %prep
+
 %setup -q
 
 %build
 
 %install
-install -m 755 -d %{buildroot}%{install_dir}/
+install -m 0755 -d %{buildroot}%{install_dir}/
 cp -r scripts %{buildroot}%{install_dir}/
 
 %clean
