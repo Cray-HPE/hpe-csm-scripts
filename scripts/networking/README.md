@@ -1,3 +1,3 @@
 # Networking Scripts
 
-Place scripts for working with DNS, DHCP, Networking Switches, or other networking components here.
+* DNS - This directory contains tools to maintain and modify DNS and system DNS records.
