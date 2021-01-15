@@ -4,18 +4,18 @@ Use ./dns_records.py to view (-p), modify (requires -f) and delete (-x -f) stati
 System DNS records come either dynamically from DHCP (Kea and SMD) or may be defined statically via SLS.  Records in SLS /networks are picked up by the DNS manager every 2 minutes and added to DNS.   This utility provides a better visual reference and more safety nets than modifying SLS records via dumpstate/loadstate and JSON.
 
 ## Usage:
-Help
+### Help
 ```
 ./dns_records.py
 ./dns_records.py -h
 ```
 
-View/Print Existing Records
+### View/Print Existing Records
 ```
 ./dns_records.py -p
 ```
 
-Modify or Add a Record 
+### Modify or Add a Record 
 ```
 # To test
 ./dns_records -i <IPv4 Address> <Name/A> <Alias/CNAME list>"
@@ -23,7 +23,7 @@ Modify or Add a Record
 ./dns_records -i <IPv4 Address> <Name/A> <Alias/CNAME list>" -f
 ```
 
-Delete a Record (BE CAREFUL!)
+### Delete a Record (BE CAREFUL!)
 ```
 # To test
 ./dns_records -i <IPv4 Address> <Name/A> <Alias/CNAME list> -x "
