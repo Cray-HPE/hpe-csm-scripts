@@ -7,7 +7,6 @@
 %define install_dir /opt/cray/csm
 
 Requires: bash
-Requires: craycli-wrapper
 Requires: jq
 
 Name: hpe-csm-scripts
