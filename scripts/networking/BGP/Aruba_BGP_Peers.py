@@ -195,10 +195,54 @@ for i in range(len(sls_cache)):
                 in sls_cache[i]["ExtraProperties"]["Subnets"][z]["FullName"]
             ):
                 CAN_prefix = sls_cache[i]["ExtraProperties"]["Subnets"][z]["CIDR"]
+                pprint.pprint("CAN Prefix " + CAN_prefix)
 
-HMN_prefix = "10.94.100.0/24"
-NMN_prefix = "10.92.100.0/24"
-TFTP_prefix = "10.92.100.60/32"
+# get HMN prefix
+for i in range(len(sls_cache)):
+    if "ExtraProperties" in sls_cache[i]:
+        for z in range(len(sls_cache[i]["ExtraProperties"]["Subnets"])):
+            if (
+                "HMN MetalLB"
+                in sls_cache[i]["ExtraProperties"]["Subnets"][z]["FullName"]
+            ):
+                HMN_prefix = sls_cache[i]["ExtraProperties"]["Subnets"][z]["CIDR"]
+                pprint.pprint("HMN Prefix " + HMN_prefix)
+
+# get NMN prefix
+for i in range(len(sls_cache)):
+    if "ExtraProperties" in sls_cache[i]:
+        for z in range(len(sls_cache[i]["ExtraProperties"]["Subnets"])):
+            if (
+                "NMN MetalLB"
+                in sls_cache[i]["ExtraProperties"]["Subnets"][z]["FullName"]
+            ):
+                NMN_prefix = sls_cache[i]["ExtraProperties"]["Subnets"][z]["CIDR"]
+                pprint.pprint("NMN Prefix " + NMN_prefix)
+
+# get TFTP prefix
+for i in range(len(sls_cache)):
+    if "ExtraProperties" in sls_cache[i]:
+        for z in range(len(sls_cache[i]["ExtraProperties"]["Subnets"])):
+            if (
+                "NMN MetalLB"
+                in sls_cache[i]["ExtraProperties"]["Subnets"][z]["FullName"]
+            ):
+                for x in range(
+                    len(sls_cache[i]["ExtraProperties"]["Subnets"][z]["IPReservations"])
+                ):
+                    if (
+                        "cray-tftp"
+                        in sls_cache[i]["ExtraProperties"]["Subnets"][z][
+                            "IPReservations"
+                        ][x]["Name"]
+                    ):
+                        TFTP_prefix = (
+                            sls_cache[i]["ExtraProperties"]["Subnets"][z][
+                                "IPReservations"
+                            ][x]["IPAddress"]
+                            + "/32"
+                        )
+                        pprint.pprint("TFTP Prefix " + TFTP_prefix)
 
 asn = 65533
 
@@ -555,14 +599,14 @@ for ips in switch_ips:
 
     logout = session.post(f"https://{ips}/rest/v10.04/logout")  # logout of switch
 
-print("")
-print("")
+print()
+print()
 print(
     "BGP configuration updated on {}, please log into the switches and verify the configuration.".format(
         ", ".join(switch_ips)
     )
 )
-print("")
+print()
 print(
     "The BGP process may need to be restarted on the switches for all of them to become ESTABLISHED."
 )
