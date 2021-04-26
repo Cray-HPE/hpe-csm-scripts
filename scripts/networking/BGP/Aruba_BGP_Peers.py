@@ -343,6 +343,7 @@ bgp_data = {"asn": asn, "router_id": "", "maximum_paths": 8}
 bgp_neighbor10_05 = {
     "ip_or_group_name": "",
     "remote_as": asn,
+    "passive": True,
     "route_maps": {"ipv4-unicast": {"in": ""}},
     "shutdown": False,
     "activate": {"ipv4-unicast": True},
@@ -351,6 +352,7 @@ bgp_neighbor10_05 = {
 bgp_neighbor10_06 = {
     "ip_or_ifname_or_group_name": "",
     "remote_as": asn,
+    "passive": True,
     "route_maps": {"ipv4-unicast": {"in": ""}},
     "shutdown": False,
     "activate": {"ipv4-unicast": True},
@@ -569,6 +571,7 @@ for ips in switch_ips:
                 vsx_neighbor = dict(bgp_neighbor10_06)
                 vsx_neighbor["ip_or_ifname_or_group_name"] = x
                 del vsx_neighbor["route_maps"]
+                del vsx_neighbor["passive"]
                 response = remote_post(bgp_neighbor_url, vsx_neighbor)
 
     # update BGP neighbors on firmware of 10.06
@@ -587,6 +590,7 @@ for ips in switch_ips:
                 vsx_neighbor = dict(bgp_neighbor10_05)
                 vsx_neighbor["ip_or_group_name"] = x
                 del vsx_neighbor["route_maps"]
+                del vsx_neighbor["passive"]
                 response = remote_post(bgp_neighbor_url, vsx_neighbor)
 
     write_mem_url = (
