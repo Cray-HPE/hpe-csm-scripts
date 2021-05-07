@@ -338,7 +338,7 @@ for i in range(len(sls_cache)):
 print(ncn_can_ips)
 
 # json payload
-bgp_data = {"asn": asn, "router_id": "", "maximum_paths": 8}
+bgp_data = {"asn": asn, "router_id": "", "maximum_paths": 8, "ibgp_distance": 70}
 
 bgp_neighbor10_05 = {
     "ip_or_group_name": "",
