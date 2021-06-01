@@ -1,38 +1,45 @@
 #!/bin/bash
 # Copyright (C) 2021 Hewlett Packard Enterprise Development LP
-# Sets static NTP, timezone, and DNS entries on an iLO BMC
+# Sets static NTP, timezone, and DNS entries on a BMC *functionality is vendor-dependent
 # Author: Jacob Salmela <jacob.salmela@hpe.com>
 set -eo pipefail
 
-BMC="$HOSTNAME-mgmt"
-VENDOR="$(ipmitool fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
-if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
-  manager=1
-  interface=1
-  # Time to wait before checking if the BMC is back after a reset
-  secs=30
-elif [[ "$VENDOR" = *GIGA*BYTE* ]]; then
-  manager=Self
-  interface=bond0
-  # GBs are slow and need more time to reset
-  #FIXME: Do a real check here instead of a static sleep
-  secs=360
-elif [[ "$VENDOR" = *Intel* ]]; then
-  manager=BMC
-  interface=1
-  secs=30
-  # Some ipmitool commands are used to gather info for use with SDPTool so the channel needs to be defined here
-  # This channel can vary, but is often 1 for Intel machines
-  channel=3
-  # this is an internal-only container that runs SDPTool for the Intels
-  sdptool="cray-sdptool:2.1.0"
-  sdptool_repo="ssh://git@stash.us.cray.com:7999/~jsalmela/cray-sdptool.git"
-fi
+# set_vars() sets some global variables used throughout the script
+function set_vars() {
+  if [[ -z $BMC ]]; then
+    VENDOR="$(ipmitool fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
+  else
+    VENDOR="$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
+  fi
 
-if [[ -z ${USERNAME} ]] || [[ -z ${IPMI_PASSWORD} ]]; then
-  echo "\$USERNAME \$IPMI_PASSWORD must be set"
-  exit 1
-fi
+  if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
+    manager=1
+    interface=1
+    # Time to wait before checking if the BMC is back after a reset
+    secs=30
+  elif [[ "$VENDOR" = *GIGA*BYTE* ]]; then
+    manager=Self
+    interface=bond0
+    # GBs are slow and need more time to reset
+    #FIXME: Do a real check here instead of a static sleep
+    secs=360
+  elif [[ "$VENDOR" = *Intel* ]]; then
+    manager=BMC
+    interface=3
+    secs=30
+    # Some ipmitool commands are used to gather info for use with SDPTool so the channel needs to be defined here
+    # This channel can vary, but is often 1 for Intel machines
+    channel=3
+    # this is an internal-only container that runs SDPTool for the Intels
+    sdptool="cray-sdptool:2.1.0"
+    sdptool_repo="ssh://git@stash.us.cray.com:7999/~jsalmela/cray-sdptool.git"
+  fi
+
+  if [[ -z ${USERNAME} ]] || [[ -z ${IPMI_PASSWORD} ]]; then
+    echo "\$USERNAME \$IPMI_PASSWORD must be set"
+    exit 1
+  fi
+}
 
 usage() {
   # Generates a usage line
@@ -117,8 +124,23 @@ usage() {
 #/          set-bmc-ntp-dns.sh ilo -Z 7
 #/
 
+# pit_die() kills the script if it cannot run on the pit
+function pit_die() {
+  if [[ $BMC != $HOSTNAME-mgmt ]];then return 0 ; fi
+
+  if [[ -f /var/www/ephemeral/configs/data.json ]] \
+    || [[ $BMC == *pit* ]] \
+    || [[ $BMC == ncn-m001* ]]; then
+      echo "Cannot run this function on the PIT"
+      exit 2
+  fi
+}
+
 # make_api_call() uses curl to contact an API endpoint
 function make_api_call() {
+
+  pit_die
+
   local endpoint="$1"
   local method="$2"
   local payload="$3"
@@ -171,6 +193,8 @@ function make_api_call() {
 # show_current_bmc_datetime() shows the current datetime on the BMC
 function show_current_bmc_datetime() {
 
+  echo "Showing current datetime for $BMC..."
+
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]] || [[ "$VENDOR" = *GIGA*BYTE* ]] ; then
 
     make_api_call "redfish/v1/Managers/${manager}/DateTime" \
@@ -189,6 +213,8 @@ function show_current_bmc_datetime() {
 # show_current_bmc_datetime() shows the current datetime on the BMC
 function show_current_bmc_timezone() {
 
+  echo "Showing current timezone for $BMC..."
+
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]] || [[ "$VENDOR" = *GIGA*BYTE* ]] ; then
 
         make_api_call "redfish/v1/Managers/${manager}/DateTime" \
@@ -200,6 +226,9 @@ function show_current_bmc_timezone() {
 
 # set_bmc_timezone() manually sets the timezone on the BMC using an index number from .TimeZoneList
 function set_bmc_timezone() {
+
+  echo "Setting timezone for $BMC..."
+
   if [[ -z $TIMEZONE ]]; then
 
     echo "No timezone index provided."
@@ -219,6 +248,11 @@ function set_bmc_timezone() {
 
 # show_current_ipmi_lan() shows lan print info from ipmitool
 function show_current_ipmi_lan() {
+
+  echo "Showing current lan info from ipmi for $BMC..."
+
+  # Don't run on the PIT
+  pit_die
 
   local ip_src="" && ip_src=$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC lan print $channel \
                               | grep -Ei 'IP Address Source\s+\:')
@@ -240,6 +274,9 @@ function show_current_ipmi_lan() {
 
 # show_current_bmc_settings() shows the current iLo settings for DNS and NTP
 function show_current_bmc_settings() {
+
+  echo "Showing current BMC settings $BMC..."
+
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
     echo ".StaticNTPServers:"
     make_api_call "redfish/v1/Managers/${manager}/DateTime" \
@@ -261,6 +298,8 @@ function show_current_bmc_settings() {
       "GET" null \
       ".Oem.Hpe.DHCPv6"
 
+    show_current_ipmi_lan
+
   elif [[ "$VENDOR" = *GIGA*BYTE* ]]; then
 
     echo ".NTP:"
@@ -277,6 +316,8 @@ function show_current_bmc_settings() {
     make_api_call "redfish/v1/Managers/${manager}/EthernetInterfaces/${interface}" \
       "GET" null \
       ".DHCPv4.DHCPEnabled"
+
+    show_current_ipmi_lan
 
   elif [[ "$VENDOR" = *Intel* ]]; then
 
@@ -297,6 +338,8 @@ function show_current_bmc_settings() {
 
 # reset_bmc_manager() gracefully restarts the BMC and waits a bit for it to come back
 function reset_bmc_manager() {
+  echo "Reseting $BMC..."
+
   if [[ "$1" == all-force ]]; then
 
       reset_type='{"ResetType": "ForceRestart"}'
@@ -333,6 +376,9 @@ function reset_bmc_manager() {
 
 # disable_ilo_dhcp() disables dhcp on the iLO since ipmitool cannot fully disable it.  This requres a restart.
 function disable_ilo_dhcp() {
+
+  echo "Disabling DHCP on $BMC..."
+
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
     # Check if it's already disabled
     dhcpv4_dns_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure -u ${USERNAME}:${IPMI_PASSWORD} -L -s | jq .Oem.Hpe.DHCPv4.UseDNSServers)
@@ -392,6 +438,9 @@ function disable_ilo_dhcp() {
 
 # get_ci_ntp_servers() gets ntp servers defined in cloud-init meta-data under the key 'ntp.servers'
 function get_ci_ntp_servers() {
+
+  pit_die
+
   # get ntp servers from cloud-init
   echo "{\"StaticNTPServers\": $(cat /var/lib/cloud/instance/user-data.txt \
     | yq read - -j \
@@ -554,7 +603,7 @@ function set_bmc_dns() {
 
       # {"Oem": {"Hpe": {"IPv4": {"DNSServers": ["<DNS server 1>", "<DNS server 2>"]} }}}
       dns_key=$(echo "{\"Oem\" :{\"Hpe\": {\"IPv4\": {\"DNSServers\": [")
-      dns_close=$(echo "]}}")
+      dns_close=$(echo "]}}}}")
 
     elif [[ "$VENDOR" = *GIGA*BYTE* ]]; then
 
@@ -591,7 +640,7 @@ function set_bmc_dns() {
 
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
 
-    make_api_call "redfish/v1/Managers/${manager}/NetworkProtocol" \
+    make_api_call "redfish/v1/Managers/${manager}/EthernetInterfaces/${interface}" \
       "PATCH" \
       "$dns_servers" null
 
@@ -606,11 +655,29 @@ function set_bmc_dns() {
 
   elif [[ "$VENDOR" = *Intel* ]]; then
 
-    if ! eval podman image ls | grep sdptool >/dev/null; then
-      echo "SDPtool container needed for Intel functionality"
-      echo "    git clone $sdptool_repo"
-      echo "    cd cray-sdptool && podman build -t $sdptool -f Dockerfile ."
+    echo "Checking for SDPTool for use on $VENDOR..."
+
+    if ! eval command -v SDPTool >/dev/null; then
+
+      echo "SDPTool not available..."
+
+      echo "Checking for containerized version..."
+
+      if ! eval podman image ls | grep sdptool >/dev/null; then
+
+        echo "SDPtool container needed for $VENDOR functionality"
+        echo "    git clone $sdptool_repo"
+        echo "    cd cray-sdptool && podman build -t $sdptool -f Dockerfile ."
+
+        exit 1
+
+      fi
+
+    else
+
+      echo "SDPTool not found.  Cannot continue."
       exit 1
+
     fi
 
     local ipaddr="" && ipaddr=$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC lan print $channel \
@@ -623,6 +690,8 @@ function set_bmc_dns() {
                               | grep -Ei 'Default Gateway IP\s+\:' \
                               | awk '{print $NF}')
 
+    local bmc=$(host $BMC | awk '{print $4}')
+
     # For internal systems only.
     # https://stash.us.cray.com/users/jsalmela/repos/cray-sdptool/browse
     # docker build -t cray-sdptool:2.1.0 -f Dockerfile .
@@ -631,7 +700,7 @@ function set_bmc_dns() {
       --rm \
       --mount type=bind,source=$PWD,target=/usr/local/log/SDPTool/Logfiles/ \
       "$sdptool" \
-      "$BMC" \
+      "$bmc" \
       "$USERNAME" \
       "$IPMI_PASSWORD" \
       setlan \
@@ -669,9 +738,14 @@ subcommand="$1"; shift  # Remove command from the argument list
 # Parse options to the install sub command
 case "$subcommand" in
   ilo)
-    while getopts "AsZ:tzSD:N:dnrf" opt; do
+    set_vars
+    while getopts "H:AsZ:tzSD:N:dnrf" opt; do
       case ${opt} in
-        A) show_current_bmc_settings
+        # user-defined hostname
+        H) BMC="$OPTARG"
+           set_vars
+           ;;
+        A) show_current_bmc_datetime
            disable_ilo_dhcp
            set_bmc_dns
            set_bmc_ntp
@@ -706,8 +780,13 @@ case "$subcommand" in
     ;;
   # GIGABYTE-specific flags
   gb)
-    while getopts "AstD:N:dnrf" opt; do
+    set_vars
+    while getopts "H:AstD:N:dnrf" opt; do
       case ${opt} in
+        # user-defined hostname
+        H) BMC="$OPTARG"
+           set_vars
+           ;;
         A) show_current_bmc_settings
            set_bmc_dns
            set_bmc_ntp
@@ -737,17 +816,19 @@ case "$subcommand" in
     ;;
   # Intel-specific flags
   intel)
-    while getopts "t:s:D:d:" opt; do
+    set_vars
+    while getopts "H:tsD:dr" opt; do
       case ${opt} in
-        t) BMC="$OPTARG"
-           show_current_bmc_datetime ;;
-        s) BMC="$OPTARG"
-           show_current_bmc_settings ;;
+        # user-defined hostname
+        H) BMC="$OPTARG"
+           set_vars
+           ;;
+        t) show_current_bmc_datetime ;;
+        s) show_current_bmc_settings ;;
         D) DNS_SERVERS="$OPTARG"
            ;;
-        d) BMC="$OPTARG"
-           set_bmc_dns
-           ;;
+        d) set_bmc_dns ;;
+        r) reset_bmc_manager ;;
         \?)
           echo "Invalid Option: -$OPTARG" 1>&2
           exit 1
