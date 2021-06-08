@@ -4,6 +4,32 @@
 # Author: Jacob Salmela <jacob.salmela@hpe.com>
 set -eo pipefail
 
+CREATE_NETRC_PYTHON="\
+import os
+import sys
+import tempfile
+user=os.environ['USERNAME']
+pw=os.environ['IPMI_PASSWORD']
+host=sys.argv[1]
+try:
+  homedir = os.environ['HOME']
+except:
+  homedir = '/root'
+with tempfile.NamedTemporaryFile(mode='wt', encoding='ascii', delete=False, dir=homedir) as f:
+  tfile = f.name
+os.chmod(tfile, 0o700)
+with open(tfile, 'wt') as f:
+  f.write('machine %s login %s password %s\n' % (host, user, pw))
+print(tfile)"
+
+function netrc_file() {
+  if ! /usr/bin/python3 -c "$CREATE_NETRC_PYTHON" "$1" ; then
+    echo "Error generating temporary netrc file" 1>&2
+    exit 1
+  fi
+  return 0
+}
+
 # set_vars() sets some global variables used throughout the script
 function set_vars() {
   if [[ -z ${USERNAME} ]] || [[ -z ${IPMI_PASSWORD} ]]; then
@@ -145,16 +171,17 @@ function make_api_call() {
   local method="$2"
   local payload="$3"
   local filter="$4"
+  NETRC=$(netrc_file "$BMC")
   if [[ "$method" == GET ]]; then
     # A simple GET request is mostly the same
-    curl "https://${BMC}/${endpoint}" --insecure -L -s -u ${USERNAME}:${IPMI_PASSWORD} | jq ${filter}
+    curl "https://${BMC}/${endpoint}" --insecure -L -s --netrc-file "$NETRC" | jq ${filter}
 
   elif [[ "$method" == PATCH ]]; then
 
     if [[ "$VENDOR" = *GIGA*BYTE* ]]; then
 
       # GIGABYTE seems to need If-Match headers.  For now, just accept * all since we don't know yet what they are looking for
-      curl -X PATCH "https://${BMC}/${endpoint}" --insecure -L -u ${USERNAME}:${IPMI_PASSWORD} \
+      curl -X PATCH "https://${BMC}/${endpoint}" --insecure -L --netrc-file "$NETRC" \
         -H "Content-Type: application/json" -H "Accept: application/json" \
         -H "If-Match: *" \
         -d "${payload}"
@@ -162,7 +189,7 @@ function make_api_call() {
 
     else
 
-      curl -X PATCH "https://${BMC}/${endpoint}" --insecure -L -u ${USERNAME}:${IPMI_PASSWORD} \
+      curl -X PATCH "https://${BMC}/${endpoint}" --insecure -L --netrc-file "$NETRC" \
         -H "Content-Type: application/json" -H "Accept: application/json" \
         -d "${payload}"
       echo -e "\n"
@@ -173,7 +200,7 @@ function make_api_call() {
 
     if [[ "$VENDOR" = *GIGA*BYTE* ]]; then
 
-      curl -X POST "https://${BMC}/${endpoint}" --insecure -L -u ${USERNAME}:${IPMI_PASSWORD} \
+      curl -X POST "https://${BMC}/${endpoint}" --insecure -L --netrc-file "$NETRC" \
         -H "Content-Type: application/json" -H "Accept: application/json" \
         -H "If-Match: *" \
         -d "${payload}"
@@ -181,13 +208,14 @@ function make_api_call() {
 
     else
 
-      curl -X POST "https://${BMC}/${endpoint}" --insecure -L -u ${USERNAME}:${IPMI_PASSWORD} \
+      curl -X POST "https://${BMC}/${endpoint}" --insecure -L --netrc-file "$NETRC" \
         -H "Content-Type: application/json" -H "Accept: application/json" \
         -d "${payload}"
       echo -e "\n"
 
     fi
   fi
+  rm "$NETRC"
 }
 
 # show_current_bmc_datetime() shows the current datetime on the BMC
@@ -381,10 +409,12 @@ function disable_ilo_dhcp() {
 
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
     # Check if it's already disabled
-    dhcpv4_dns_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure -u ${USERNAME}:${IPMI_PASSWORD} -L -s | jq .Oem.Hpe.DHCPv4.UseDNSServers)
-    dhcpv4_ntp_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure -u ${USERNAME}:${IPMI_PASSWORD} -L -s | jq .Oem.Hpe.DHCPv4.UseNTPServers)
-    dhcpv6_dns_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure -u ${USERNAME}:${IPMI_PASSWORD} -L -s | jq .Oem.Hpe.DHCPv6.UseDNSServers)
-    dhcpv6_ntp_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure -u ${USERNAME}:${IPMI_PASSWORD} -L -s | jq .Oem.Hpe.DHCPv6.UseNTPServers)
+    NETRC=$(netrc_file "$BMC")
+    dhcpv4_dns_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure --netrc-file "$NETRC" -L -s | jq .Oem.Hpe.DHCPv4.UseDNSServers)
+    dhcpv4_ntp_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure --netrc-file "$NETRC" -L -s | jq .Oem.Hpe.DHCPv4.UseNTPServers)
+    dhcpv6_dns_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure --netrc-file "$NETRC" -L -s | jq .Oem.Hpe.DHCPv6.UseDNSServers)
+    dhcpv6_ntp_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure --netrc-file "$NETRC" -L -s | jq .Oem.Hpe.DHCPv6.UseNTPServers)
+    rm "$NETRC"
 
     # Disable DHCPv4
     echo -e "Disabling DHCPv4 on iLO..."
