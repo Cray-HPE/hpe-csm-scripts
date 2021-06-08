@@ -6,10 +6,15 @@ set -eo pipefail
 
 # set_vars() sets some global variables used throughout the script
 function set_vars() {
+  if [[ -z ${USERNAME} ]] || [[ -z ${IPMI_PASSWORD} ]]; then
+    echo "\$USERNAME \$IPMI_PASSWORD must be set"
+    exit 1
+  fi
+  
   if [[ -z $BMC ]]; then
     VENDOR="$(ipmitool fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
   else
-    VENDOR="$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
+    VENDOR="$(ipmitool -I lanplus -U $USERNAME -E -H $BMC fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
   fi
 
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
@@ -33,11 +38,6 @@ function set_vars() {
     # this is an internal-only container that runs SDPTool for the Intels
     sdptool="cray-sdptool:2.1.0"
     sdptool_repo="ssh://git@stash.us.cray.com:7999/~jsalmela/cray-sdptool.git"
-  fi
-
-  if [[ -z ${USERNAME} ]] || [[ -z ${IPMI_PASSWORD} ]]; then
-    echo "\$USERNAME \$IPMI_PASSWORD must be set"
-    exit 1
   fi
 }
 
@@ -254,16 +254,16 @@ function show_current_ipmi_lan() {
   # Don't run on the PIT
   pit_die
 
-  local ip_src="" && ip_src=$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC lan print $channel \
+  local ip_src="" && ip_src=$(ipmitool -I lanplus -U $USERNAME -E -H $BMC lan print $channel \
                               | grep -Ei 'IP Address Source\s+\:')
 
-  local ipaddr="" && ipaddr=$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC lan print $channel \
+  local ipaddr="" && ipaddr=$(ipmitool -I lanplus -U $USERNAME -E -H $BMC lan print $channel \
                               | grep -Ei 'IP Address\s+\:')
 
-  local netmask="" && netmask=$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC lan print $channel \
+  local netmask="" && netmask=$(ipmitool -I lanplus -U $USERNAME -E -H $BMC lan print $channel \
                                 | grep -Ei 'Subnet Mask\s+\:')
 
-  local defgw="" && defgw=$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC lan print $channel \
+  local defgw="" && defgw=$(ipmitool -I lanplus -U $USERNAME -E -H $BMC lan print $channel \
                             | grep -Ei 'Default Gateway IP\s+\:')
 
   echo "$ip_src"
@@ -691,13 +691,13 @@ function set_bmc_dns() {
 
     fi
 
-    local ipaddr="" && ipaddr=$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC lan print $channel \
+    local ipaddr="" && ipaddr=$(ipmitool -I lanplus -U $USERNAME -E -H $BMC lan print $channel \
                                 | grep -Ei 'IP Address\s+\:' \
                                 | awk '{print $NF}')
-    local netmask="" && netmask=$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC lan print $channel \
+    local netmask="" && netmask=$(ipmitool -I lanplus -U $USERNAME -E -H $BMC lan print $channel \
                                   | grep -Ei 'Subnet Mask\s+\:' \
                                   | awk '{print $NF}')
-    local defgw="" && defgw=$(ipmitool -I lanplus -U $USERNAME -P $IPMI_PASSWORD -H $BMC lan print $channel \
+    local defgw="" && defgw=$(ipmitool -I lanplus -U $USERNAME -E -H $BMC lan print $channel \
                               | grep -Ei 'Default Gateway IP\s+\:' \
                               | awk '{print $NF}')
 
