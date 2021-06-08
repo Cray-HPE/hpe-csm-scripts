@@ -441,6 +441,17 @@ function get_ci_ntp_servers() {
 
   pit_die
 
+  if ! command -v yq &> /dev/null
+  then
+    echo "yq could not be found in $PATH"
+    exit 1
+  fi
+
+  if ! [ -f /var/lib/cloud/instance/user-data.txt ]; then
+    echo "error: /var/lib/cloud/instance/user-data.txt not found"
+    exit 1
+  fi
+
   # get ntp servers from cloud-init
   echo "{\"StaticNTPServers\": $(cat /var/lib/cloud/instance/user-data.txt \
     | yq read - -j \
@@ -717,6 +728,12 @@ function set_bmc_dns() {
 if [[ "$#" -eq 0 ]];then
   echo "No arguments supplied."
   usage && exit 1
+fi
+
+if ! command -v jq &> /dev/null
+then
+  echo "jq could not be found in $PATH"
+  exit 1
 fi
 
 while getopts "h" opt; do
