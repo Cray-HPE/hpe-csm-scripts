@@ -4,29 +4,16 @@
 # Author: Jacob Salmela <jacob.salmela@hpe.com>
 set -eo pipefail
 
-CREATE_NETRC_PYTHON="\
-import os
-import sys
-import tempfile
-user=os.environ['USERNAME']
-pw=os.environ['IPMI_PASSWORD']
-host=sys.argv[1]
-try:
-  homedir = os.environ['HOME']
-except:
-  homedir = '/root'
-with tempfile.NamedTemporaryFile(mode='wt', encoding='ascii', delete=False, dir=homedir) as f:
-  tfile = f.name
-os.chmod(tfile, 0o700)
-with open(tfile, 'wt') as f:
-  f.write('machine %s login %s password %s\n' % (host, user, pw))
-print(tfile)"
-
 function netrc_file() {
-  if ! /usr/bin/python3 -c "$CREATE_NETRC_PYTHON" "$1" ; then
-    echo "Error generating temporary netrc file" 1>&2
-    exit 1
-  fi
+  local tmpfile
+  tmpfile=~/.netrc.$$.$RANDOM.$RANDOM
+  while [ -e "$tmpfile" ]; do
+    tmpfile=~/.netrc.$$.$RANDOM.$RANDOM
+  done
+  touch "$tmpfile"
+  chmod 600 "$tmpfile"
+  echo "machine $1 login $USERNAME password $IPMI_PASSWORD" > "$tmpfile"
+  echo "$tmpfile"
   return 0
 }
 
@@ -73,7 +60,7 @@ usage() {
   grep '^#/' "$0" | cut -c4-
 }
 
-#/ Usage: set-bmc-ntp-dns.sh [-h] ilo|gb|intel [-N NTP_SERVERS]|[-D DNS_SERVERS] [-options]
+#/ Usage: set-bmc-ntp-dns.sh [-h] ilo|gb|intel [-N NTP_SERVERS]|[-D DNS_SERVERS] [-H BMC] [-options]
 #/
 #/    Sets static NTP and DNS servers on BMCs using data defined in cloud-init (or by providing manual overrides)
 #/
