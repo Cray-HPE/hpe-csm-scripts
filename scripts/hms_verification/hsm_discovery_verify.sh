@@ -37,7 +37,7 @@ fi
 
 echo " "
 echo "Fetching HSM Components..."
-cray hsm state components list --format json | jq '.Components[] | select((.Type == "NodeBMC") or (.Type == "ChassisBMC") or (.Type == "RouterBMC")) .ID' | sort | uniq | sed 's/"//g' > ${COMPSJSON}
+cray hsm state components list --format json | jq '.Components[] | select((.Type == "NodeBMC") or (.Type == "ChassisBMC") or (.Type == "RouterBMC") or (.Type == "CabinetPDUController")) .ID' | sort | uniq | sed 's/"//g' > ${COMPSJSON}
 
 if [ `cat ${COMPSJSON} | wc -l` -eq 0 ]; then
 	echo " "
@@ -47,7 +47,7 @@ fi
 
 echo " "
 echo "Fetching HSM Redfish endpoints..."
-cray hsm inventory redfishEndpoints list --format json | jq '.RedfishEndpoints[] | select((.Type == "NodeBMC") or (.Type == "ChassisBMC") or (.Type == "RouterBMC")) .ID' | sort | uniq | sed 's/"//g' > ${RFEPSJSON}
+cray hsm inventory redfishEndpoints list --format json | jq '.RedfishEndpoints[] | select((.Type == "NodeBMC") or (.Type == "ChassisBMC") or (.Type == "RouterBMC") or (.Type == "CabinetPDUController")) .ID' | sort | uniq | sed 's/"//g' > ${RFEPSJSON}
 
 if [ `cat ${RFEPSJSON} | wc -l` -eq 0 ]; then
 	echo " "
