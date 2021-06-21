@@ -4,19 +4,6 @@
 # Author: Jacob Salmela <jacob.salmela@hpe.com>
 set -eo pipefail
 
-function netrc_file() {
-  local tmpfile
-  tmpfile=~/.netrc.$$.$RANDOM.$RANDOM
-  while [ -e "$tmpfile" ]; do
-    tmpfile=~/.netrc.$$.$RANDOM.$RANDOM
-  done
-  touch "$tmpfile"
-  chmod 600 "$tmpfile"
-  echo "machine $1 login $USERNAME password $IPMI_PASSWORD" > "$tmpfile"
-  echo "$tmpfile"
-  return 0
-}
-
 # set_vars() sets some global variables used throughout the script
 function set_vars() {
   if [[ -z ${USERNAME} ]] || [[ -z ${IPMI_PASSWORD} ]]; then
@@ -24,11 +11,18 @@ function set_vars() {
     exit 1
   fi
   
+  # Find my current directory
+  mydir=$(dirname ${BASH_SOURCE[0]})
+  # Set the path to our Python API-call helper script
+  make_api_call_py=${mydir}/make_api_call.py
+  
   if [[ -z $BMC ]]; then
     VENDOR="$(ipmitool fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
   else
     VENDOR="$(ipmitool -I lanplus -U $USERNAME -E -H $BMC fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
   fi
+  # Export VENDOR variable for use by Python API helper script
+  export VENDOR
 
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
     manager=1
@@ -149,7 +143,7 @@ function pit_die() {
   fi
 }
 
-# make_api_call() uses curl to contact an API endpoint
+# make_api_call() uses Python requests to contact an API endpoint
 function make_api_call() {
 
   pit_die
@@ -158,51 +152,25 @@ function make_api_call() {
   local method="$2"
   local payload="$3"
   local filter="$4"
-  NETRC=$(netrc_file "$BMC")
-  if [[ "$method" == GET ]]; then
-    # A simple GET request is mostly the same
-    curl "https://${BMC}/${endpoint}" --insecure -L -s --netrc-file "$NETRC" | jq ${filter}
+  local url="https://${BMC}/${endpoint}"
 
-  elif [[ "$method" == PATCH ]]; then
+  # Export variables for use by the make_api_call Python script
+  export method
+  export payload
+  export url
 
-    if [[ "$VENDOR" = *GIGA*BYTE* ]]; then
-
-      # GIGABYTE seems to need If-Match headers.  For now, just accept * all since we don't know yet what they are looking for
-      curl -X PATCH "https://${BMC}/${endpoint}" --insecure -L --netrc-file "$NETRC" \
-        -H "Content-Type: application/json" -H "Accept: application/json" \
-        -H "If-Match: *" \
-        -d "${payload}"
-      echo -e "\n"
-
-    else
-
-      curl -X PATCH "https://${BMC}/${endpoint}" --insecure -L --netrc-file "$NETRC" \
-        -H "Content-Type: application/json" -H "Accept: application/json" \
-        -d "${payload}"
-      echo -e "\n"
-
-    fi
-
-  elif [[ "$method" == POST ]]; then
-
-    if [[ "$VENDOR" = *GIGA*BYTE* ]]; then
-
-      curl -X POST "https://${BMC}/${endpoint}" --insecure -L --netrc-file "$NETRC" \
-        -H "Content-Type: application/json" -H "Accept: application/json" \
-        -H "If-Match: *" \
-        -d "${payload}"
-      echo -e "\n"
-
-    else
-
-      curl -X POST "https://${BMC}/${endpoint}" --insecure -L --netrc-file "$NETRC" \
-        -H "Content-Type: application/json" -H "Accept: application/json" \
-        -d "${payload}"
-      echo -e "\n"
-
-    fi
-  fi
-  rm "$NETRC"
+  case "$method" in
+    "GET")
+        /usr/bin/python3 ${make_api_call_py} | jq ${filter}
+        ;;
+    "PATCH"|"POST")
+        /usr/bin/python3 ${make_api_call_py}
+        ;;
+    *)
+        echo "ERROR: make_api_call: Unrecognized method: $method"
+        exit 1
+        ;;
+  esac
 }
 
 # show_current_bmc_datetime() shows the current datetime on the BMC
@@ -391,17 +359,22 @@ function reset_bmc_manager() {
 
 # disable_ilo_dhcp() disables dhcp on the iLO since ipmitool cannot fully disable it.  This requres a restart.
 function disable_ilo_dhcp() {
+  local method
+  local payload
+  local url
+  export payload=""
+  export method="GET"
 
   echo "Disabling DHCP on $BMC..."
 
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
     # Check if it's already disabled
-    NETRC=$(netrc_file "$BMC")
-    dhcpv4_dns_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure --netrc-file "$NETRC" -L -s | jq .Oem.Hpe.DHCPv4.UseDNSServers)
-    dhcpv4_ntp_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure --netrc-file "$NETRC" -L -s | jq .Oem.Hpe.DHCPv4.UseNTPServers)
-    dhcpv6_dns_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure --netrc-file "$NETRC" -L -s | jq .Oem.Hpe.DHCPv6.UseDNSServers)
-    dhcpv6_ntp_enabled=$(curl "https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}" --insecure --netrc-file "$NETRC" -L -s | jq .Oem.Hpe.DHCPv6.UseNTPServers)
-    rm "$NETRC"
+    export url="https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}"
+
+    dhcpv4_dns_enabled=$(/usr/bin/python3 ${make_api_call_py} | jq .Oem.Hpe.DHCPv4.UseDNSServers)
+    dhcpv4_ntp_enabled=$(/usr/bin/python3 ${make_api_call_py} | jq .Oem.Hpe.DHCPv4.UseNTPServers)
+    dhcpv6_dns_enabled=$(/usr/bin/python3 ${make_api_call_py} | jq .Oem.Hpe.DHCPv6.UseDNSServers)
+    dhcpv6_ntp_enabled=$(/usr/bin/python3 ${make_api_call_py} | jq .Oem.Hpe.DHCPv6.UseNTPServers)
 
     # Disable DHCPv4
     echo -e "Disabling DHCPv4 on iLO..."
@@ -851,7 +824,7 @@ case "$subcommand" in
   # Intel-specific flags
   intel)
     set_vars
-    while getopts "H:tsD:dr" opt; do
+    while getopts "H:tsD:dnr" opt; do
       case ${opt} in
         # user-defined hostname
         H) BMC="$OPTARG"
@@ -862,6 +835,7 @@ case "$subcommand" in
         D) DNS_SERVERS="$OPTARG"
            ;;
         d) set_bmc_dns ;;
+        n) echo "Invalid Option: -n not supported for Intel" 1>&2 ; exit 1 ;;
         r) reset_bmc_manager ;;
         \?)
           echo "Invalid Option: -$OPTARG" 1>&2
