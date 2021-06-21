@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.17] - 2021-06-21
+### Changed
+ - Created Python helper script to make API calls for NTP/DNS script, to avoid security issues
+   around writing passwords to files or passing them on the command line.
+
 ## [0.0.11] - 2021-06-01
 ### Changed
  - Added script to set static NTP and DNS servers on NCN BMCs (does not support Intel BMCs)
