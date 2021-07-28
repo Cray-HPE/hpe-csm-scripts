@@ -42,7 +42,7 @@ function set_vars() {
     # Some ipmitool commands are used to gather info for use with SDPTool so the channel needs to be defined here
     # This channel can vary, but is often 1 for Intel machines
     channel=3
-    # this is an internal-only container that runs SDPTool for the Intels
+    # this is an internal-only container that runs SDPTool for Intel hardware
     sdptool="cray-sdptool:2.1.0"
     sdptool_repo="ssh://git@stash.us.cray.com:7999/~jsalmela/cray-sdptool.git"
   fi
@@ -50,7 +50,7 @@ function set_vars() {
 
 usage() {
   # Generates a usage line
-  # Any line startng with with a #/ will show up in the usage line
+  # Any line starting with with a #/ will show up in the usage line
   grep '^#/' "$0" | cut -c4-
 }
 
@@ -66,8 +66,8 @@ usage() {
 #/       [-A]               configure a BMC, running all the necessary tasks (fresh installs only)
 #/       [-s]               shows the current configuration of NTP and DNS
 #/       [-t]               show the current date/time for the BMC
-#/       [-N NTP_SERVERS]   a comma seperated list of NTP servers (manual override when no 1.5 metadata exists)
-#/       [-D DNS_SERVERS]   a comma seperated list of DNS servers (manual override when no 1.5 metadata exists)
+#/       [-N NTP_SERVERS]   a comma-separated list of NTP servers (manual override when no 1.5 metadata exists)
+#/       [-D DNS_SERVERS]   a comma-separated list of DNS servers (manual override when no 1.5 metadata exists)
 #/       [-d]               sets static DNS servers using cloud-init data or overrides
 #/       [-n]               sets static NTP servers using cloud-init data or overrides (see -S for iLO)
 #/       [-r]               gracefully resets the BMC
@@ -84,11 +84,11 @@ usage() {
 #/    options specific to the 'intel' command:
 #/       [-d IP]            IP of the BMC to configure with static DNS
 #/                          *this uses SDPTool, which normally runs from the PIT
-#/                          as it's not included in the image(s)
+#/                          as it is not included in the image(s)
 #/
 #/    EXAMPLES:
 #/
-#/       Upgrading 1.4 to 1.5 passing in NTP and DNS entries that don't exist in 1.4 metadata:
+#/       Upgrading 1.4 to 1.5 passing in NTP and DNS entries that do not exist in 1.4 metadata:
 #/           set-bmc-ntp-dns.sh ilo -s
 #/           set-bmc-ntp-dns.sh ilo -S #(iLO only)
 #/           set-bmc-ntp-dns.sh ilo -N time-hmn,time.nist.gov -n
@@ -232,9 +232,9 @@ function set_bmc_timezone() {
 # show_current_ipmi_lan() shows lan print info from ipmitool
 function show_current_ipmi_lan() {
 
-  echo "Showing current lan info from ipmi for $BMC..."
+  echo "Showing current ipmitool lan print $channel output for $BMC..."
 
-  # Don't run on the PIT
+  # Do not run on the PIT
   pit_die
 
   local ip_src="" && ip_src=$(ipmitool -I lanplus -U $USERNAME -E -H $BMC lan print $channel \
@@ -255,7 +255,7 @@ function show_current_ipmi_lan() {
   echo "$defgw"
 }
 
-# show_current_bmc_settings() shows the current iLo settings for DNS and NTP
+# show_current_bmc_settings() shows the current iLO settings for DNS and NTP
 function show_current_bmc_settings() {
 
   echo "Showing current BMC settings $BMC..."
@@ -368,7 +368,7 @@ function reset_bmc_manager() {
   echo -e "\n"
 }
 
-# disable_ilo_dhcp() disables dhcp on the iLO since ipmitool cannot fully disable it.  This requres a restart.
+# disable_ilo_dhcp() disables DHCP on the iLO because ipmitool cannot fully disable it. This requires a restart.
 function disable_ilo_dhcp() {
   local method
   local payload
@@ -379,7 +379,7 @@ function disable_ilo_dhcp() {
   echo "Disabling DHCP on $BMC..."
 
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
-    # Check if it's already disabled
+    # Check if it is already disabled
     export url="https://${BMC}/redfish/v1/Managers/${manager}/ethernetinterfaces/${interface}"
 
     dhcpv4_dns_enabled=$(/usr/bin/python3 ${make_api_call_py} | jq .Oem.Hpe.DHCPv4.UseDNSServers)
@@ -437,7 +437,7 @@ function disable_ilo_dhcp() {
   fi
 }
 
-# get_ci_ntp_servers() gets ntp servers defined in cloud-init meta-data under the key 'ntp.servers'
+# get_ci_ntp_servers() gets NTP servers defined in cloud-init meta-data under the key 'ntp.servers'
 function get_ci_ntp_servers() {
 
   pit_die
@@ -453,7 +453,7 @@ function get_ci_ntp_servers() {
     exit 1
   fi
 
-  # get ntp servers from cloud-init
+  # get NTP servers from cloud-init
   echo "{\"StaticNTPServers\": $(cat /var/lib/cloud/instance/user-data.txt \
     | yq read - -j \
     | jq .ntp.servers \
@@ -497,7 +497,7 @@ function set_bmc_ntp() {
         else
           ntp_array[i]=\"${ntp_array[i]}\",
         fi
-        # and echo each one so it prints as a json list
+        # and echo each one so it prints as a JSON list
         echo "${ntp_array[i]}"
       done
       # close out the list
@@ -505,7 +505,7 @@ function set_bmc_ntp() {
     fi
     ntp_servers=$ntp_json
   else
-    # othwerwise, get it from cloud-init
+    # otherwise, get it from cloud-init
     local ntp_servers=""
     ntp_servers="$(get_ci_ntp_servers)"
   fi
@@ -559,15 +559,15 @@ function set_bmc_ntp() {
   fi
 }
 
-# get_ci_dns_servers gets dns servers defined in cloud-init meta-data under the key 'dns-server'
+# get_ci_dns_servers gets DNS servers defined in cloud-init meta-data under the key 'dns-server'
 function get_ci_dns_servers() {
   local dns=""
 
-  # get dns servers from cloud-init
+  # get DNS servers from cloud-init
   if [[ -f /var/www/ephemeral/configs/data.json ]] \
     || [[ $HOSTNAME == *pit ]]; then
 
-    # if we're on the pit, pull from basecamp data
+    # if we are on the pit, pull from basecamp data
     dns_servers=$(jq '.Global."meta-data"."dns-server"' < /var/www/ephemeral/configs/data.json)
 
   elif [[ -f /run/cloud-init/instance-data.json ]]; then
@@ -576,13 +576,13 @@ function get_ci_dns_servers() {
 
   else
 
-    # Sometimes the cloud-init files aren't there
+    # Sometimes the cloud-init files are not there
     cloud-init init
     dns_servers=$(jq '.ds.meta_data.Global."dns-server"' < /run/cloud-init/instance-data.json)
 
   fi
 
-  # split dns on space and put them into an array so we can craft the JSON payload
+  # split DNS on space and put them into an array so we can craft the JSON payload
   local dnslist=(${dns_servers// / })
 
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
@@ -645,7 +645,7 @@ function set_bmc_dns() {
     )
     dns_servers=$dns_json
   else
-    # othwerwise, get it from cloud-init
+    # otherwise, get it from cloud-init
     local dns_servers=""
     dns_servers="$(get_ci_dns_servers)"
   fi
@@ -660,7 +660,7 @@ function set_bmc_dns() {
 
   # elif [[ "$VENDOR" = **GIGA*BYTE** ]]; then
 
-    # Not possible?  This is read-only
+    # Not possible? This is read-only
     # make_api_call "redfish/v1/Managers/${manager}/EthernetInterfaces/${interface}" \
     #   "PATCH" \
     #   "$dns_servers" null
@@ -687,7 +687,7 @@ function set_bmc_dns() {
 
     else
 
-      echo "SDPTool not found.  Cannot continue."
+      echo "SDPTool not found. Cannot continue."
       exit 1
 
     fi
@@ -707,7 +707,7 @@ function set_bmc_dns() {
     # For internal systems only.
     # https://stash.us.cray.com/users/jsalmela/repos/cray-sdptool/browse
     # docker build -t cray-sdptool:2.1.0 -f Dockerfile .
-    # You can also install SDPTool manually, but it needs a bunch of Python stuff we don't currently install
+    # You can also install SDPTool manually, but it needs a bunch of Python stuff we do not currently install
     podman run \
       --rm \
       --mount type=bind,source=$PWD,target=/usr/local/log/SDPTool/Logfiles/ \
@@ -767,7 +767,7 @@ case "$subcommand" in
            disable_ilo_dhcp
            set_bmc_dns
            set_bmc_ntp
-           echo "Run 'chronyc clients' on ncn-m001 to validate NTP on the BMC is working"
+           echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working"
            ;;
         Z) TIMEZONE="$OPTARG"
            set_bmc_timezone
@@ -781,7 +781,7 @@ case "$subcommand" in
         N) NTP_SERVERS="$OPTARG"
            ;;
         d) set_bmc_dns ;;
-        n) set_bmc_ntp ; echo "Run 'chronyc clients' on ncn-m001 to validate NTP on the BMC is working" ;;
+        n) set_bmc_ntp ; echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working" ;;
         r) reset_bmc_manager ;;
         f) reset_bmc_manager all-force;;
         \?)
@@ -808,7 +808,7 @@ case "$subcommand" in
         A) show_current_bmc_settings
            set_bmc_dns
            set_bmc_ntp
-           echo "Run 'chronyc clients' on ncn-m001 to validate NTP on the BMC is working"
+           echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working"
            ;;
         t) show_current_bmc_datetime ;;
         s) show_current_bmc_settings ;;
@@ -817,7 +817,7 @@ case "$subcommand" in
         N) NTP_SERVERS="$OPTARG"
            ;;
         d) set_bmc_dns ;;
-        n) set_bmc_ntp ; echo "Run 'chronyc clients' on ncn-m001 to validate NTP on the BMC is working" ;;
+        n) set_bmc_ntp ; echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working" ;;
         r) reset_bmc_manager ;;
         f) reset_bmc_manager all-force;;
         \?)
