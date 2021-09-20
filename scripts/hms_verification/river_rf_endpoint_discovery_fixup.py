@@ -307,9 +307,6 @@ def main():
             print("Found %d river BMCs to fix:" % len(bmcList))
             bmcStr = genIDStr(bmcList)
             print(bmcStr)
-            choice = input("Continue [y/n]:").lower()
-            if choice == "n":
-                return 0
             print("Deleting %d EthernetInterfaces entries for HSM" % len(bmcList))
             bmcList, deleteFailList = deleteHSMEthEntries(authToken, bmcList)
             if len(bmcList) == 0:
