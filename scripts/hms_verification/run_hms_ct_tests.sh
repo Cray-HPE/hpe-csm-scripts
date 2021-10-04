@@ -25,6 +25,7 @@
 
 ctSmokeLog="/tmp/ct_smoke_log.txt"
 ctFuncLog="/tmp/ct_func_log.txt"
+HELP_URL="https://github.com/Cray-HPE/docs-csm/blob/main/troubleshooting/hms_ct_manual_run.md"
 
 echo "================================================================="
 echo "============  Running HMS CT Smoke Tests... ====================="
@@ -34,6 +35,9 @@ echo " "
 if [ ! -e /opt/cray/tests/ncn-resources/hms/hms-test/hms_run_ct_smoke_tests_ncn-resources.sh ]; then
 	echo " "
 	echo "===> CT Smoke test not found -- not installed?"
+	echo " "
+	echo "For troubleshooting and manual steps, see ${HELP_URL}."
+	echo " "
 	exit 1
 fi
 
@@ -42,6 +46,9 @@ rval=$?
 
 if [[ $rval != 0 ]]; then
 	echo "CT Smoke Test Failed.  See output in ${ctSmokeLog}."
+	echo " "
+	echo "For troubleshooting and manual steps, see ${HELP_URL}."
+	echo " "
 	exit 1
 fi
 
@@ -55,6 +62,9 @@ echo " "
 if [ ! -e /opt/cray/tests/ncn-resources/hms/hms-test/hms_run_ct_functional_tests_ncn-resources.sh ]; then
 	echo " "
 	echo "===> CT Functional Test not found -- not installed?"
+	echo " "
+	echo "For troubleshooting and manual steps, see ${HELP_URL}."
+	echo " "
 	exit 1
 fi
 
@@ -64,6 +74,9 @@ rval=$?
 if [[ $rval != 0 ]]; then
 	echo " "
 	echo "===> CT Functional Test Failed.  See output in ${ctFuncLog}."
+	echo " "
+	echo "For troubleshooting and manual steps, see ${HELP_URL}."
+	echo " "
 	exit 1
 fi
 

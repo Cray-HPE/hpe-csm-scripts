@@ -35,6 +35,7 @@
 
 SWPW=""
 DISCOVERY_LOG=/tmp/hmsdisc.log
+HELP_URL="https://github.com/Cray-HPE/docs-csm/blob/main/troubleshooting/aruba_snmp_manual_fixup.md"
 
 debugLevel=0
 testMode=0
@@ -127,6 +128,8 @@ if [ $? -ne 0 ]; then
 	echo "ERROR executing SLS switch HW search:"
 	cat $swJSON
 	echo " "
+	echo "For troubleshooting and manual steps, see ${HELP_URL}."
+	echo " "
 	echo "Exiting..."
 	exit 1
 fi
@@ -172,6 +175,9 @@ done
 
 if [[ "${HMS_DISCOVERY_POD}" == "" ]]; then
 	echo "ERROR: No valid HMS discovery pod found; discovery in progress? Exiting."
+	echo " "
+	echo "For troubleshooting and manual steps, see ${HELP_URL}."
+	echo " "
 	exit 1
 fi
 
@@ -316,6 +322,8 @@ done
 if (( ok != 1 )); then
 	echo " "
 	echo "Some Aruba switches did not get SNMP reset, Exiting..."
+	echo " "
+	echo "For troubleshooting and manual steps, see ${HELP_URL}."
 	echo " "
 	exit 1
 fi
