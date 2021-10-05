@@ -157,6 +157,10 @@ def usage():
 	print("                    the root account SSH public key.")
 	print(" ")
 
+def errorGuidance():
+	print(" ")
+	print("For troubleshooting and manual steps, see https://github.com/Cray-HPE/docs-csm/blob/main/troubleshooting/BMC_SSH_key_manual_fixup.md.")
+	print(" ")
 
 
 def main():
@@ -209,12 +213,16 @@ def main():
 	authToken = getAuthenticationToken()
 	if authToken == "":
 		print("ERROR: No/empty auth token, can't continue.")
+		print(" ")
+		print("For troubleshooting and manual steps, see https://github.com/Cray-HPE/docs-csm/blob/main/operations/security_and_authentication/Retrieve_an_Authentication_Token.md.")
+		print(" ")
 		return 1
 
 	if not rootSSHKey:
 		rootSSHKey = getRootSSHKey()
 		if not rootSSHKey:
 			print("ERROR: Can't get root SSH key.")
+			errorGuidance()
 			return 1
 
 	# Get all discovered mountain BMCs -- ChassisBMCs, NodeBMCs, RouterBMCs.
@@ -224,11 +232,13 @@ def main():
 	compRaw,stat = getHSMComponents(authToken)
 	if stat != 0:
 		print("HSM Component fetch returned non-zero.")
+		errorGuidance()
 		return 1
 
 	rfepRaw,stat = getHSMRFEPs(authToken)
 	if stat != 0:
 		print("HSM RF Endpoint fetch returned non-zero.")
+		errorGuidance()
 		return 1
 
 	# Generate a JSON payload for SCSD.
@@ -316,6 +326,7 @@ def main():
 
 	if rstat != 0:
 		print("Setting SSH keys failed: %s" % rfepJSON)
+		errorGuidance()
 		return 1
 
 	rval = 0
@@ -324,6 +335,9 @@ def main():
 		if tgt['StatusCode'] >= 300:
 			print("Failed to set SSH keys on %s: %s" % (tgt['Xname'],tgt['StatusMsg']))
 			rval = 1
+
+	if rval != 0:
+		errorGuidance()
 
 	return rval
 
