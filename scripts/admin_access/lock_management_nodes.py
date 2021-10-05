@@ -139,6 +139,9 @@ def genSummary(compList, compLockList, lockRet):
     print("")
     return lockRet['Counts']['Failure']
 
+def errorGuidance():
+    print("\nFor troubleshooting and manual steps, see https://github.com/Cray-HPE/docs-csm/blob/main/operations/hardware_state_manager/Lock_and_Unlock_Management_Nodes.md\n")
+
 def main():
     """Entry point"""
     numErrs = 0
@@ -146,11 +149,13 @@ def main():
     authToken = getAuthenticationToken()
     if authToken == "":
         print("ERROR: No/empty auth token, can't continue.")
+        print("\nFor troubleshooting and manual steps, see https://github.com/Cray-HPE/docs-csm/blob/main/operations/security_and_authentication/Retrieve_an_Authentication_Token.md\n")
         return 1
 
     compData, stat = getHSMComps(authToken, "?type=node&role=management")
     if stat != 0:
         print("HSM Components returned non-zero.")
+        errorGuidance()
         return 1
     for comp in compData['Components']:
         if "Locked" in comp and comp['Locked'] is True:
@@ -165,11 +170,13 @@ def main():
             print("Failed to lock Management Nodes: " + retData['detail'])
         else:
             print("Failed to lock Management Nodes.")
+        errorGuidance()
         return 1
 
     numErrs = genSummary(compData['Components'], compList, retData)
 
     if numErrs > 0:
+        errorGuidance()
         return 1
 
     return 0

@@ -275,27 +275,34 @@ def genSummary(bmcList, deleteFailList, ethTimeoutList, rfepTimeoutList):
 
     print("")
 
+def errorGuidance():
+    print("\nFor troubleshooting and manual steps, see https://github.com/Cray-HPE/docs-csm/blob/main/troubleshooting/known_issues/discovery_job_not_creating_redfish_endpoints.md\n")
+
 def main():
     """Entry point"""
     numErrs = 0
     authToken = getAuthenticationToken()
     if authToken == "":
         print("ERROR: No/empty auth token, can't continue.")
+        print("\nFor troubleshooting and manual steps, see https://github.com/Cray-HPE/docs-csm/blob/main/operations/security_and_authentication/Retrieve_an_Authentication_Token.md\n")
         return 1
 
     rfepData, stat = getHSMRFEP(authToken, "?type=nodeBMC&type=routerBMC")
     if stat != 0:
         print("HSM RedfishEndpoints returned non-zero.")
+        errorGuidance()
         return 1
 
     ethData, stat = getHSMEthData(authToken, "?type=nodeBMC&type=routerBMC")
     if stat != 0:
         print("HSM EthernetInterfaces returned non-zero.")
+        errorGuidance()
         return 1
 
     slsData, stat = getSLSData(authToken, "?type=comptype_node&class=River")
     if stat != 0:
         print("HSM EthernetInterfaces returned non-zero.")
+        errorGuidance()
         return 1
 
     bmcList = genBMCList(rfepData, ethData, slsData)
@@ -322,6 +329,7 @@ def main():
         print("No river BMCs were found to need this RedfishEndpoint discovery fixup.")
 
     if numErrs > 0:
+        errorGuidance()
         return 1
 
     return 0
