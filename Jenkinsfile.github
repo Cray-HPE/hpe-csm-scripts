@@ -27,7 +27,7 @@ pipeline {
         stage("Publish") {
             steps {
                 script {
-                    publishCsmRpms(component: env.NAME, pattern: "dist/hpe-csm-scripts-rpmbuild/RPMS/NOARCH/*.rpm", arch: "x86_64", isStable: env.IS_STABLE)
+                    publishCsmRpms(component: env.NAME, pattern: "dist/hpe-csm-scripts-rpmbuild/RPMS/noarch/*.rpm", arch: "x86_64", isStable: env.IS_STABLE)
                     publishCsmRpms(component: env.NAME, pattern: "dist/hpe-csm-scripts-rpmbuild/SRPMS/*.rpm", arch: "src", isStable: env.IS_STABLE)
                 }
             }
