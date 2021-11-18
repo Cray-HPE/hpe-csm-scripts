@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.30] - 2021-11-18
+### Changed
+ - Added script to set SNMP creds on mgmt network leaf switches.
+
 ## [0.0.17] - 2021-06-21
 ### Changed
  - Created Python helper script to make API calls for NTP/DNS script, to avoid security issues
