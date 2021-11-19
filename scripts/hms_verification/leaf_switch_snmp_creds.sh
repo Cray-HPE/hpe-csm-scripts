@@ -45,8 +45,75 @@ swNamesAruba=""
 swNamesDell=""
 
 debugLevel=0
+checkOnly=0
 testMode=0
 
+# swname: switch name or IP addr
+# swtype: switch type 'dell' or 'aruba'
+# Return: 0 == no bad creds found
+#         1 == bad creds found
+#         2 == communication error with switch
+checkSwitchSNMPCreds() {
+	swname=$1
+	swtype=$2
+
+
+	echo "Checking SNMP default creds on $swtype leaf switch: ${swname}"
+	echo " "
+	if (( testMode != 0 )); then
+		echo "[Test mode, not interacting with switches.]"
+		return 0
+	fi
+
+	showcmd="show snmpv3 users"
+	if [[ "${swtype}" == "dell" ]]; then
+		showcmd="show snmp user"
+	fi
+
+ 	outtext=$(expect -c "
+spawn ssh admin@${swname}
+while 1 {
+  expect {
+    \"*yes/no*\" {send \"yes\n\"}
+    \"password: \" {send \"${MGMTPW}\n\"}
+    \"*# \" {break}
+  }
+}
+send \"${showcmd}\n\"
+expect \"# \"
+send \"exit\n\"
+")
+
+	if [ $? -ne 0 ]; then
+		echo "Communication with $swname failed."
+		echo " "
+		echo "Communication log:"
+		echo " "
+		cat $expLog
+		echo " "
+		return 2
+	fi
+
+	if (( debugLevel > 1 )); then
+		echo $outtext
+	fi
+
+	# Check for "bad" user ID
+
+	isbad=""
+	if [[ "${swtype}" == "dell" ]]; then
+		isbad=`echo $outtext | grep "User name" | grep -w ${SNMPDelUser}`
+	else
+		isbad=`echo $outtext | grep -w ${SNMPDelUser}`
+	fi
+
+	if [[ "${isbad}" != "" ]]; then
+		echo "==> SNMP user ID '${SNMPDelUser}' found on switch ${swname}."
+		return 1
+	fi
+
+	return 0
+}
 
 setSwitchSNMPCredsDell() {
 	swname=$1
@@ -190,14 +257,15 @@ send \"exit\n\"
 	return 0
 }
 
-
 usage() {
-	echo "Usage: `basename $0` [-h] [-a] [-d] [-t]"
+	echo "Usage: `basename $0` [-h] [-a] [-c] [-d] [-t]"
 	echo " "
 	echo "   -h    Help text"
-	echo "   -d    Print debug info during execution."
 	echo "   -a    Fix up Aruba switches only.  Default"
 	echo "         is all leaf switches."
+	echo "   -c    Check only.  Check switches for undesireable"
+	echo "         SNMP creds but don't change them."
+	echo "   -d    Print debug info during execution."
 	echo "   -t    Test mode, don't touch any switches."
 	echo " "
 	echo "This script will prompt for all needed information."
@@ -215,11 +283,14 @@ usage() {
 
 ### ENTRY POINT
 
-while getopts "hadt" opt; do
+while getopts "hacdt" opt; do
 	case "${opt}" in
 		h)
 			usage
 			exit 0
+			;;
+		c)
+			checkOnly=1
 			;;
 		d)
 			(( debugLevel = debugLevel + 1 ))
@@ -292,40 +363,42 @@ else
 	SNMPDelUser=${SNMPDELUSER}
 fi
 
-if [[ -z "${SNMPNEWUSER}" ]]; then
-	echo " "
-	echo -n "==> Enter new default SNMP user ID to add: "
-	read SNMPNewUser
-else
-	SNMPNewUser=${SNMPNEWUSER}
-fi
+if (( checkOnly == 0 )); then
+	if [[ -z "${SNMPNEWUSER}" ]]; then
+		echo " "
+		echo -n "==> Enter new default SNMP user ID to add: "
+		read SNMPNewUser
+	else
+		SNMPNewUser=${SNMPNEWUSER}
+	fi
 
-if [[ -z "${SNMPAUTHPW}" ]]; then
-	echo " "
-	echo -n "==> Enter new default SNMP auth password: "
-	read SNMPAuthPW
-else
-	SNMPAuthPW=${SNMPAUTHPW}
-fi
+	if [[ -z "${SNMPAUTHPW}" ]]; then
+		echo " "
+		echo -n "==> Enter new default SNMP auth password: "
+		read SNMPAuthPW
+	else
+		SNMPAuthPW=${SNMPAUTHPW}
+	fi
 
-if [[ ${#SNMPAuthPW} -lt 8 || ${#SNMPAuthPW} -gt 32 ]]; then
-	echo "Auth password length must be 8-32 characters long."
-	echo " "
-	exit 1
-fi
+	if [[ ${#SNMPAuthPW} -lt 8 || ${#SNMPAuthPW} -gt 32 ]]; then
+		echo "Auth password length must be 8-32 characters long."
+		echo " "
+		exit 1
+	fi
 
-if [[ -z "${SNMPPRIVPW}" ]]; then
-	echo " "
-	echo -n "==> Enter new default SNMP private password: "
-	read SNMPPrivPW
-else
-	SNMPPrivPW=${SNMPPRIVPW}
-fi
+	if [[ -z "${SNMPPRIVPW}" ]]; then
+		echo " "
+		echo -n "==> Enter new default SNMP private password: "
+		read SNMPPrivPW
+	else
+		SNMPPrivPW=${SNMPPRIVPW}
+	fi
 
-if [[ ${#SNMPPrivPW} -lt 8 || ${#SNMPPrivPW} -gt 32 ]]; then
-	echo "Private password length must be 8-32 characters long."
-	echo " "
-	exit 1
+	if [[ ${#SNMPPrivPW} -lt 8 || ${#SNMPPrivPW} -gt 32 ]]; then
+		echo "Private password length must be 8-32 characters long."
+		echo " "
+		exit 1
+	fi
 fi
 
 if [[ -z "${SNMPMGMTPW}" ]]; then
@@ -337,7 +410,7 @@ else
 fi
 
 if (( debugLevel > 0 )); then
-	echo "Removing SNMP user ID: ${SNMPDelUser}"
+	echo "Undesireable SNMP user ID: ${SNMPDelUser}"
 	echo "Adding new SNMP user ID: ${SNMPNewUser}"
 	echo "SNMP auth password: ${SNMPAuthPW}"
 	echo "SNMP priv password: ${SNMPPrivPW}"
@@ -348,24 +421,30 @@ ok=1
 
 for mswitch in ${swNamesAruba}; do
 	echo "==============================="
-	setSwitchSNMPCredsAruba $mswitch
-	if [ $? -ne 0 ]; then
-		ok=0
-		badSwitches="${badSwitches} ${mswitch}"
+	checkSwitchSNMPCreds $mswitch aruba
+	if (( checkOnly == 0 )); then
+		setSwitchSNMPCredsAruba $mswitch
+		if [ $? -ne 0 ]; then
+			ok=0
+			badSwitches="${badSwitches} ${mswitch}"
+		fi
 	fi
 done
 for mswitch in ${swNamesDell}; do
 	echo "==============================="
-	setSwitchSNMPCredsDell $mswitch
-	if [ $? -ne 0 ]; then
-		ok=0
-		badSwitches="${badSwitches} ${mswitch}"
+	checkSwitchSNMPCreds $mswitch dell
+	if (( checkOnly == 0 )); then
+		setSwitchSNMPCredsDell $mswitch
+		if [ $? -ne 0 ]; then
+			ok=0
+			badSwitches="${badSwitches} ${mswitch}"
+		fi
 	fi
 done
 
 if (( ok != 1 )); then
 	echo " "
-	echo "The following switches failed to set new default SNMP credentials:"
+	echo "The following switches had communication errors:"
 	echo " "
 	echo "   ${badSwitches}"
 	echo " "
