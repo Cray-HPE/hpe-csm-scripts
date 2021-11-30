@@ -22,7 +22,6 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 #
-# Copyright (C) 2021 Hewlett Packard Enterprise Development LP
 # Sets static NTP, timezone, and DNS entries on a BMC *functionality is vendor-dependent
 # Author: Jacob Salmela <jacob.salmela@hpe.com>
 set -eo pipefail
