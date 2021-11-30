@@ -22,7 +22,6 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 #
-# Copyright 2018-2020 Hewlett Packard Enterprise Development LP
 
 import sys
 import getopt
