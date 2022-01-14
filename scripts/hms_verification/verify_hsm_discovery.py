@@ -2,7 +2,7 @@
 
 # MIT License
 #
-# (C) Copyright [2021] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2021-2022] Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -394,29 +394,6 @@ def genRiverDetails(slsData, compData, rfepData):
 			for emsg in errs:
 				print("    %s" % (emsg))
 
-
-		# Check CabPDUControllers in SLS.  Check comps/RFEP.  Mgmt port?
-		# Mismatches are WARNING.
-
-		errs = []
-
-		pdus = list(filter(lambda f: (f['TypeString'] == "CabinetPDUController"), slsJSON))
-		for comp in pdus:
-			bname = comp['Xname']
-			if not bname.startswith(cab.xname):
-				continue
-
-			noc = doChecks(cab.xclass, comp, bname, "CabinetPDUController", compJSON, rfepJSON, slsJSON)
-			if len(noc) > 0:
-				errs.append("- %s - %s." % (bname, noc))
-
-		# Print out the Node BMC info.
-		if not errs:
-			print("  CabinetPDUControllers: PASS")
-		else:
-			print("  CabinetPDUControllers: WARNING")
-			for emsg in errs:
-				print("    %s" % (emsg))
 
 		# Iterate ChassisBMCs in SLS.  These are really GB CMCs.
 
