@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.31] - 2022-01-14
+### Changed
+ - Removed duplicate CabinetPDUController output from verify_hsm_discovery.
+
 ## [0.0.30] - 2021-11-18
 ### Changed
  - Added script to set SNMP creds on mgmt network leaf switches.
