@@ -2,7 +2,7 @@
 
 # MIT License
 #
-# (C) Copyright [2021] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2021-2022] Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -119,20 +119,19 @@ def genSummary(compList, compLockList, lockRet):
     print("Operation Summary")
     print("=================")
 
-    print("Found %d management nodes:" % (len(compList)))
-    compStr = genIDStr(compList)
-    print("    " + compStr)
+    print("Found %d management nodes and BMCs:" % (len(compList)))
+    print("    " + ','.join(compList))
 
-    print("Found %d management nodes to lock:" % (len(compLockList)))
+    print("Found %d management nodes and BMCs to lock:" % (len(compLockList)))
     print("    " + ','.join(compLockList))
 
     if lockRet['Counts']['Success'] > 0:
-        print("Successfully locked %d management nodes:" % (lockRet['Counts']['Success']))
+        print("Successfully locked %d management nodes and BMCs:" % (lockRet['Counts']['Success']))
         compStr = ','.join(lockRet['Success']['ComponentIDs'])
         print("    " + compStr)
 
     if lockRet['Counts']['Failure'] > 0:
-        print("Failed to lock %d management nodes:" % (lockRet['Counts']['Failure']))
+        print("Failed to lock %d management nodes and BMCs:" % (lockRet['Counts']['Failure']))
         for comp in lockRet['Failure']:
             print("    " + comp['ID'] + " - " + comp['Reason'])
 
@@ -146,6 +145,8 @@ def main():
     """Entry point"""
     numErrs = 0
     compList = []
+    compLockList = []
+    bmcList = []
     authToken = getAuthenticationToken()
     if authToken == "":
         print("ERROR: No/empty auth token, can't continue.")
@@ -158,13 +159,29 @@ def main():
         errorGuidance()
         return 1
     for comp in compData['Components']:
+        compList.append(comp['ID'])
+        fields = comp['ID'].split('n')
+        bmcList.append(fields[0])
         if "Locked" in comp and comp['Locked'] is True:
             continue
-        compList.append(comp['ID'])
-    if len(compList) == 0:
+        compLockList.append(comp['ID'])
+    if len(compLockList) == 0 and len(bmcList) == 0:
         print("No Management Nodes to Lock")
         return 0
-    retData, stat = doHSMLock(authToken, compList)
+    compData, stat = getHSMComps(authToken, "?type=nodebmc&id=" + '&id='.join(bmcList))
+    if stat != 0:
+        print("HSM Components returned non-zero.")
+        errorGuidance()
+        return 1
+    for comp in compData['Components']:
+        compList.append(comp['ID'])
+        if "Locked" in comp and comp['Locked'] is True:
+            continue
+        compLockList.append(comp['ID'])
+    if len(compLockList) == 0:
+        print("No Management Nodes to Lock")
+        return 0
+    retData, stat = doHSMLock(authToken, compLockList)
     if stat != 0:
         if "detail" in retData:
             print("Failed to lock Management Nodes: " + retData['detail'])
@@ -173,7 +190,7 @@ def main():
         errorGuidance()
         return 1
 
-    numErrs = genSummary(compData['Components'], compList, retData)
+    numErrs = genSummary(compList, compLockList, retData)
 
     if numErrs > 0:
         errorGuidance()
