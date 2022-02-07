@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.32] - 2022-02-03
+### Changed
+ - Change lock_management_nodes.py to lock nodeBMCs of management nodes as well.
+
 ## [0.0.31] - 2022-01-14
 ### Changed
  - Removed duplicate CabinetPDUController output from verify_hsm_discovery.
