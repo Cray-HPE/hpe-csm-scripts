@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.33] - 2022-05-09
+### Changed
+ - Change dns_records.py to use the NMN API gateway for the calls to SLS.
+
 ## [0.0.32] - 2022-02-03
 ### Changed
  - Change lock_management_nodes.py to lock nodeBMCs of management nodes as well.
