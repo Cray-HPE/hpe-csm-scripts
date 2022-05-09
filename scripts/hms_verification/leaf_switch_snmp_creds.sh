@@ -84,6 +84,7 @@ send \"exit\n\"
 		echo " "
 		echo "Communication log:"
 		echo " "
+    #shellcheck disable=SC2154
 		cat $expLog
 		echo " "
 		return 1

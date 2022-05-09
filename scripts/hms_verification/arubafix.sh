@@ -259,6 +259,7 @@ if [ $hasbadmac -ne 0 ]; then
 		fi
 
 		#Ignore networks that are not one of "HMN", "HMN_RVR", or "HMN_MTN"
+    #shellcheck disable=SC2166
 		if [ "${NW}" == "HMN" -o "${NW}" == "HMN_RVR" -o "${NW}" == "HMN_MTN" ]; then
 			rslt=1
 			break

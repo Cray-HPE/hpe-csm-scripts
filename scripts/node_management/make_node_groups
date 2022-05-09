@@ -95,6 +95,7 @@ make_uai=""
 replace_previous=""
 : ${CRAY:="cray"}
 
+#shellcheck disable=SC2048
 if ! args=$(getopt msuwANR $*)
 then
     usage
