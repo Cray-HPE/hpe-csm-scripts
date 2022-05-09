@@ -165,7 +165,7 @@ except Exception as err:
 # Get existing SLS data for comparison (used as a cache)
 #
 sls_cache = None
-sls_url = 'https://api_gw_service.local/apis/sls/v1/networks'
+sls_url = 'https://api-gw-service-nmn.local/apis/sls/v1/networks'
 auth_headers = {'Authorization': 'Bearer {}'.format(token)}
 try:
     sls_cache = remote_request(
