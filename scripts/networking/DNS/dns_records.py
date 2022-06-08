@@ -23,6 +23,18 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 #
 
+# Temporary workaround for invalid hostnames in ssl SAN fields that contain _'s
+# which are technically invalid for a hostname. Note only applies if someone has
+# updated the idna library on the system to a newer release than we have
+# shipped.
+#
+# Ref: https://github.com/kjd/idna/issues/50#issuecomment-449699205
+import idna
+
+idna.idnadata.codepoint_classes['PVALID'] = tuple(
+    sorted(list(idna.idnadata.codepoint_classes['PVALID']) + [0x5f0000005f])
+)
+
 import sys
 import getopt
 import json
