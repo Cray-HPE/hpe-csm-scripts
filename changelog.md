@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.34] - 2022-06-08
+### Changed
+ - Update make_node_groups to handle K8s output change
+
 ## [0.0.33] - 2022-05-09
 ### Changed
  - Change dns_records.py to use the NMN API gateway for the calls to SLS.
