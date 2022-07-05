@@ -95,7 +95,7 @@ function get_client_secret()
 #   Example:
 #      ncn # curl -s \
 #                         -d grant_type=client_credentials -d client_id=admin-client \
-#                         -d client_secret=be914011-91f5-4c84-bd06-88ec7f1bc00d \
+#                         -d client_secret=<client_secret> \
 #                         https://api-gw-service-nmn.local/keycloak/realms/shasta/protocol/openid-connect/token \
 #                         | jq
 #      {
