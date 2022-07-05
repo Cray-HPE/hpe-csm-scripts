@@ -67,7 +67,7 @@ function get_auth_access_token()
 #
 #   Example:
 #      ncn # kubectl get secrets admin-client-auth -o jsonpath='{.data.client-secret}' | base64 -d
-#      be914011-91f5-4c84-bd06-88ec7f1bc00d
+#      <admin_client_secret>
 #
 function get_client_secret()
 {
@@ -99,13 +99,13 @@ function get_client_secret()
 #                         https://api-gw-service-nmn.local/keycloak/realms/shasta/protocol/openid-connect/token \
 #                         | jq
 #      {
-#         "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSld...<snip>",
+#         "access_token": "<access_token>",
 #         "expires_in": 300,
 #         "not-before-policy": 0,
 #         "refresh_expires_in": 1800,
-#         "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSld...<snip>",
+#         "refresh_token": "<refresh_token>",
 #         "scope": "profile email",
-#         "session_state": "b7a848af-42e4-4702-a866-25dd4b8cc3cc",
+#         "session_state": "<session_state>",
 #         "token_type": "bearer"
 #      }
 #
