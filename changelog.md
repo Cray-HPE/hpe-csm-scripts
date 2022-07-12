@@ -1,9 +1,10 @@
 # Changelog
 
-## [0.0.35] - 2022-07-07
+## [0.0.35] - 2022-07-12
 ### Changed
  - Updates to run_hms_ct_tests.sh to run Helm versions of CT tests.
  - Update make_node_groups to handle K8s output change.
+ - Update verify_hsm_discovery.py to use HSM v2 instead of v1 which is deprecated.
 
 ## [0.0.33] - 2022-05-09
 ### Changed
