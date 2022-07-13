@@ -21,16 +21,16 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 # RPM
-SPEC_NAME ?= hpe-csm-scripts
-RPM_NAME ?= hpe-csm-scripts
-RPM_VERSION ?= $(shell cat .version)
-SPEC_FILE ?= ${SPEC_NAME}.spec
-BUILD_METADATA ?= "1~development~$(shell git rev-parse --short HEAD)"
-RPM_SOURCE_NAME ?= ${RPM_NAME}-${RPM_VERSION}
-RPM_BUILD_DIR ?= $(PWD)/dist/hpe-csm-scripts-rpmbuild
+NAME ?= ${GIT_REPO_NAME}
+ifeq ($(VERSION),)
+VERSION := $(shell git describe --tags | tr -s '-' '~' | tr -d '^v')
+endif
+SPEC_FILE ?= ${NAME}.spec
+RPM_SOURCE_NAME ?= ${NAME}-${VERSION}
+RPM_BUILD_DIR ?= $(PWD)/dist/rpmbuild
 RPM_SOURCE_PATH := ${RPM_BUILD_DIR}/SOURCES/${RPM_SOURCE_NAME}.tar.bz2
 
-build: rpm_prepare rpm_package_source rpm_build_source rpm_build
+rpm: rpm_prepare rpm_package_source rpm_build_source rpm_build
 
 rpm_prepare:
 	rm -rf $(RPM_BUILD_DIR)
@@ -41,7 +41,7 @@ rpm_package_source:
 	tar --transform 'flags=r;s,^,/$(RPM_SOURCE_NAME)/,' --exclude .git --exclude dist -cvjf $(RPM_SOURCE_PATH) .
 
 rpm_build_source:
-	BUILD_METADATA=$(BUILD_METADATA) rpmbuild -ts $(RPM_SOURCE_PATH) --define "_topdir $(RPM_BUILD_DIR)"
+	rpmbuild -ts $(RPM_SOURCE_PATH) --define "_topdir $(RPM_BUILD_DIR)"
 
 rpm_build:
-	BUILD_METADATA=$(BUILD_METADATA) rpmbuild -ba $(SPEC_FILE) --define "_topdir $(RPM_BUILD_DIR)" --nodeps
+	rpmbuild -ba $(SPEC_FILE) --define "_topdir $(RPM_BUILD_DIR)" --nodeps
