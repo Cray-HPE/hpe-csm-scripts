@@ -1,5 +1,5 @@
-# CSM Script
+# HPE CSM Scripts
 
-This repo is a collection of scripts that are useful to installers and admins.
+This repository is a collection of scripts that are useful to installers and admins of Cray Systems Management.
 
-Anyone can add scripts to this repo and they will be installed on the NCNs.
+Anyone can add scripts to this repository, and their additions will be installed on the NCNs.
