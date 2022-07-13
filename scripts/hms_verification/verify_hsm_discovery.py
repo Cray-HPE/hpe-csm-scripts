@@ -502,7 +502,7 @@ def genMountainDetails(slsData, compData, rfepData):
 
 			# Check RF Endpoints presence
 			flds = rfepJSON['RedfishEndpoints']
-			filtered = list(filter(lambda f: (f['ID'] == bname+"b0"), flds))
+			filtered = list(filter(lambda f: (f['ID'] == bname), flds))
 			if not filtered:
 				if len(noc) > 0:
 					noc += "; "
