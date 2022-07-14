@@ -117,7 +117,7 @@ def doRest(uri, authToken):
 # Get HSM component data
 
 def getHSMComponents(authToken):
-	url = "https://api-gw-service-nmn.local/apis/smd/hsm/v1/State/Components"
+	url = "https://api-gw-service-nmn.local/apis/smd/hsm/v2/State/Components"
 	compsJSON, rstat = doRest(url, authToken)
 	return compsJSON, rstat
 
@@ -126,7 +126,7 @@ def getHSMComponents(authToken):
 # Get HSM RFEP data
 
 def getHSMRFEP(authToken):
-	url = "https://api-gw-service-nmn.local/apis/smd/hsm/v1/Inventory/RedfishEndpoints"
+	url = "https://api-gw-service-nmn.local/apis/smd/hsm/v2/Inventory/RedfishEndpoints"
 	rfepJSON, rstat = doRest(url, authToken)
 	return rfepJSON, rstat
 
