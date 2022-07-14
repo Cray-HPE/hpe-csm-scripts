@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.36] - 2022-07-14
+
+### Changed
+- Remove WAR for bad SLS chassis data generation from verify_hsm_discovery.py.
+
 ## [0.0.35] - 2022-07-12
 ### Changed
  - Updates to run_hms_ct_tests.sh to run Helm versions of CT tests.
