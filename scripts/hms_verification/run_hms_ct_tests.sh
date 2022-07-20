@@ -154,6 +154,10 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
     echo "DONE."
 
     if [[ -r "${LOG_PATH}" ]]; then
+        # post-processing for log file readability
+        sed -i '/NAME:/{x;p;x;}' "${LOG_PATH}"
+        sed -i '/^$/{1d;}' "${LOG_PATH}"
+        echo "" >> "${LOG_PATH}"
         ALL_OUTPUT=$(cat "${LOG_PATH}")
     else
         echo "ERROR: missing readable test output file: ${LOG_PATH}"
@@ -254,6 +258,7 @@ else
     echo "DONE."
 
     if [[ -r "${LOG_PATH}" ]]; then
+        echo "" >> "${LOG_PATH}"
         TEST_OUTPUT=$(cat "${LOG_PATH}")
     else
         echo "ERROR: missing readable test output file: ${LOG_PATH}"
