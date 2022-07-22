@@ -1,9 +1,12 @@
 # Changelog
 
-## [0.0.36] - 2022-07-14
-
+## [0.0.37] - 2022-07-20
 ### Changed
-- Remove WAR for bad SLS chassis data generation from verify_hsm_discovery.py.
+ - Update run_hms_ct_tests.sh for improved log output formatting.
+
+## [0.0.36] - 2022-07-14
+### Changed
+ - Remove WAR for bad SLS chassis data generation from verify_hsm_discovery.py.
 
 ## [0.0.35] - 2022-07-12
 ### Changed
