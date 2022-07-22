@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# (C) Copyright [2021] Hewlett Packard Enterprise Development LP
+# (C) Copyright 2021-2022 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -23,7 +23,8 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 #
 
-
+#shellcheck disable=SC2046
+#shellcheck disable=SC2155
 export TOKEN=$(curl -s -k -S -d grant_type=client_credentials -d client_id=admin-client -d client_secret=`kubectl get secrets admin-client-auth -o jsonpath='{.data.client-secret}' | base64 -d` https://api-gw-service-nmn.local/keycloak/realms/shasta/protocol/openid-connect/token | jq -r '.access_token')
 export URL="https://api_gw_service.local/apis/sls/v1/networks"
 
@@ -50,6 +51,7 @@ function set_routes() {
         route_file="/etc/sysconfig/network/ifroute-bond0"
         [[ -f ${route_file} ]] || touch ${route_file}
 
+        #shellcheck disable=SC2069
         egrep "${subnet}.*${gateway}.*\-.*bond0" ${route_file} 2>&1>>/dev/null
         if [[ $? != 0 ]]
         then

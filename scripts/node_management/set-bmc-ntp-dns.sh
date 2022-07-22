@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# (C) Copyright [2021] Hewlett Packard Enterprise Development LP
+# (C) Copyright 2021-2022 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -487,6 +487,7 @@ function set_bmc_ntp() {
   echo "Setting static NTP servers on ${BMC}..."
   if [[ -n $NTP_SERVERS ]]; then
     local ntp_servers="$NTP_SERVERS"
+    #shellcheck disable=SC2206
     ntp_array=(${ntp_servers/,/ })
 
     # Each vendor has a different name for the key
@@ -605,6 +606,7 @@ function get_ci_dns_servers() {
   fi
 
   # split DNS on space and put them into an array so we can craft the JSON payload
+  #shellcheck disable=SC2206
   local dnslist=(${dns_servers// / })
 
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]]; then
@@ -646,6 +648,7 @@ function set_bmc_dns() {
 
     fi
     # split them into an array as before with NTP, so we can access each element individually
+    #shellcheck disable=SC2206
     dns_array=(${dns_servers/,/ })
     dns_json=$(echo "$dns_key"
       cnt=${#dns_array[@]}
@@ -724,6 +727,7 @@ function set_bmc_dns() {
                               | grep -Ei 'Default Gateway IP\s+\:' \
                               | awk '{print $NF}')
 
+    #shellcheck disable=SC2155
     local bmc=$(host $BMC | awk '{print $4}')
 
     # For internal systems only.
