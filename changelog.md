@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.35] - 2022-06-08
+### Changed
+ - Add workaround for dns_records.py for hostnames that contain underscores.
+
 ## [0.0.34] - 2022-06-08
 ### Changed
  - Update make_node_groups to handle K8s output change
