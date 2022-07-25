@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.38] - 2022-07-25
+### Changed
+ - Add workaround to dns_records.py to allow for hostnames with _
+
 ## [0.0.37] - 2022-07-20
 ### Changed
  - Update run_hms_ct_tests.sh for improved log output formatting.
