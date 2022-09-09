@@ -39,6 +39,14 @@ function print_and_log()
     fi
 }
 
+# set up signal handling
+trap 'if [[ -f ${LOG_PATH} ]]; then \
+          echo Received kill signal, exiting with status code: 1 | tee -a ${LOG_PATH}; \
+      else \
+          echo Received kill signal, exiting with status code: 1; \
+      fi; \
+      exit 1' SIGHUP SIGINT SIGTERM
+
 # service name, helm deployment, smoke tests bool, functional tests bool
 BSS_ARR=("bss" "cray-hms-bss" 1 1)
 CAPMC_ARR=("capmc" "cray-hms-capmc" 1 1)
@@ -75,14 +83,6 @@ TEST_SERVICE="all"
 DATE_TIME=$(date +"%Y%m%dT%H%M%S")
 LOG_PATH="/opt/cray/tests/hms_ct_test-${DATE_TIME}.log"
 HELP_URL="https://github.com/Cray-HPE/docs-csm/blob/main/troubleshooting/hms_ct_manual_run.md"
-
-# set up signal handling
-trap "if [[ -f ${LOG_PATH} ]]; then \
-          echo \"Received kill signal, exiting with status of '1'...\" | tee -a ${LOG_PATH}; \
-      else \
-          echo \"Received kill signal, exiting with status of '1'...\"; \
-      fi; \
-      exit 1" SIGHUP SIGINT SIGTERM
 
 # parse command-line options
 while getopts "hlt:" opt; do
@@ -127,13 +127,13 @@ while getopts "hlt:" opt; do
 done
 
 # sanity checks
-HELM_CHECK=$(which helm 2> /dev/null)
+which helm &> /dev/null
 if [[ $? -ne 0 ]]; then
     echo "ERROR: helm command missing"
     exit 1
 fi
 
-LOG_CHECK=$(touch ${LOG_PATH} 2> /dev/null)
+touch ${LOG_PATH} &> /dev/null
 if [[ $? -ne 0 ]]; then
     echo "ERROR: log file path is not writable: ${LOG_PATH}"
     exit 1

@@ -73,7 +73,7 @@ function get_client_secret()
 {
     # get client secret from Kubernetes
     KUBECTL_GET_SECRET_CMD="kubectl get secrets admin-client-auth -o jsonpath='{.data.client-secret}'"
-    >&2 echo $(timestamp_print "Getting client secret...")
+    >&2 echo "$(timestamp_print "Getting client secret...")"
     KUBECTL_GET_SECRET_OUT=$(eval ${KUBECTL_GET_SECRET_CMD})
     KUBECTL_GET_SECRET_RET=$?
     if [[ ${KUBECTL_GET_SECRET_RET} -ne 0 ]] ; then
@@ -117,7 +117,7 @@ function get_auth_token()
     fi
     KEYCLOAK_TOKEN_URI="https://api-gw-service-nmn.local/keycloak/realms/shasta/protocol/openid-connect/token"
     KEYCLOAK_TOKEN_CMD="curl -k -i -s -S -d grant_type=client_credentials -d client_id=admin-client -d client_secret=${CLIENT_SECRET} ${KEYCLOAK_TOKEN_URI}"
-    >&2 echo $(timestamp_print "Retrieving authentication token...")
+    >&2 echo "$(timestamp_print "Retrieving authentication token...")"
     KEYCLOAK_TOKEN_OUT=$(eval ${KEYCLOAK_TOKEN_CMD})
     KEYCLOAK_TOKEN_RET=$?
     if [[ ${KEYCLOAK_TOKEN_RET} -ne 0 ]] ; then
