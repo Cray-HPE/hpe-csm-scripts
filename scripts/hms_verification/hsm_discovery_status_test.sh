@@ -73,11 +73,10 @@ function get_client_secret()
 {
     # get client secret from Kubernetes
     KUBECTL_GET_SECRET_CMD="kubectl get secrets admin-client-auth -o jsonpath='{.data.client-secret}'"
-    >&2 echo $(timestamp_print "Running '${KUBECTL_GET_SECRET_CMD}'...")
+    >&2 echo $(timestamp_print "Getting client secret...")
     KUBECTL_GET_SECRET_OUT=$(eval ${KUBECTL_GET_SECRET_CMD})
     KUBECTL_GET_SECRET_RET=$?
     if [[ ${KUBECTL_GET_SECRET_RET} -ne 0 ]] ; then
-        >&2 echo -e "${KUBECTL_GET_SECRET_OUT}\n"
         >&2 echo -e "ERROR: '${KUBECTL_GET_SECRET_CMD}' failed with error code: ${KUBECTL_GET_SECRET_RET}\n"
         return 1
     elif [[ -z "${KUBECTL_GET_SECRET_OUT}" ]] ; then
@@ -94,19 +93,19 @@ function get_client_secret()
 #
 #   Example:
 #      ncn # curl -s \
-#                         -d grant_type=client_credentials -d client_id=admin-client \
-#                         -d client_secret=<client_secret> \
-#                         https://api-gw-service-nmn.local/keycloak/realms/shasta/protocol/openid-connect/token \
-#                         | jq
+#               -d grant_type=client_credentials -d client_id=admin-client \
+#               -d client_secret=<client_secret> \
+#               https://api-gw-service-nmn.local/keycloak/realms/shasta/protocol/openid-connect/token \
+#               | jq
 #      {
-#         "access_token": "<access_token>",
-#         "expires_in": 300,
+#         "access_token": <access_token>,
+#         "expires_in": <expire_time>,
 #         "not-before-policy": 0,
-#         "refresh_expires_in": 1800,
-#         "refresh_token": "<refresh_token>",
+#         "refresh_expires_in": <refresh_expire_time>,
+#         "refresh_token": <refresh_token>,
 #         "scope": "profile email",
-#         "session_state": "<session_state>",
-#         "token_type": "bearer"
+#         "session_state": <session_state>,
+#         "token_type": <token_type>
 #      }
 #
 function get_auth_token()
@@ -118,27 +117,24 @@ function get_auth_token()
     fi
     KEYCLOAK_TOKEN_URI="https://api-gw-service-nmn.local/keycloak/realms/shasta/protocol/openid-connect/token"
     KEYCLOAK_TOKEN_CMD="curl -k -i -s -S -d grant_type=client_credentials -d client_id=admin-client -d client_secret=${CLIENT_SECRET} ${KEYCLOAK_TOKEN_URI}"
-    >&2 echo $(timestamp_print "Running '${KEYCLOAK_TOKEN_CMD}'...")
+    >&2 echo $(timestamp_print "Retrieving authentication token...")
     KEYCLOAK_TOKEN_OUT=$(eval ${KEYCLOAK_TOKEN_CMD})
     KEYCLOAK_TOKEN_RET=$?
     if [[ ${KEYCLOAK_TOKEN_RET} -ne 0 ]] ; then
-        >&2 echo -e "${KEYCLOAK_TOKEN_OUT}\n"
-        >&2 echo -e "ERROR: '${KEYCLOAK_TOKEN_CMD}' failed with error code: ${KEYCLOAK_TOKEN_RET}\n"
+        >&2 echo -e "ERROR: Failed to retrieve authentication token, error code: ${KEYCLOAK_TOKEN_RET}\n"
         return 1
     fi
     KEYCLOAK_TOKEN_HTTP_STATUS=$(echo "${KEYCLOAK_TOKEN_OUT}" | head -n 1)
     KEYCLOAK_TOKEN_HTTP_STATUS_CHECK=$(echo "${KEYCLOAK_TOKEN_HTTP_STATUS}" | grep -E -w "200")
     if [[ -z "${KEYCLOAK_TOKEN_HTTP_STATUS_CHECK}" ]] ; then
-        >&2 echo -e "${KEYCLOAK_TOKEN_OUT}\n"
-        >&2 echo -e "ERROR: '${KEYCLOAK_TOKEN_CMD}' did not return \"200\" status code as expected\n"
+        >&2 echo -e "ERROR: Failed to retrieve authentication token, status code was not \"200\" as expected\n"
         return 1
     fi
     KEYCLOAK_TOKEN_JSON=$(echo "${KEYCLOAK_TOKEN_OUT}" | tail -n 1)
     KEYCLOAK_TOKEN_JSON_PARSED=$(echo "${KEYCLOAK_TOKEN_JSON}" | jq)
     KEYCLOAK_TOKEN_JSON_PARSED_CHECK=$?
     if [[ ${KEYCLOAK_TOKEN_JSON_PARSED_CHECK} -ne 0 ]] ; then
-        >&2 echo -e "${KEYCLOAK_TOKEN_OUT}\n"
-        >&2 echo -e "ERROR: '${KEYCLOAK_TOKEN_CMD}' did not return parsable JSON structure as expected\n"
+        >&2 echo -e "ERROR: Authentication token was not a parsable JSON structure as expected\n"
         return 1
     fi
     echo "${KEYCLOAK_TOKEN_JSON_PARSED}"
@@ -159,8 +155,7 @@ function extract_access_token()
     fi
     ACCESS_TOKEN=$(echo "${AUTH_TOKEN}" | jq -r '.access_token')
     if [[ -z "${ACCESS_TOKEN}" ]] || [[ "${ACCESS_TOKEN}" == null ]] ; then
-        >&2 echo -e "${AUTH_TOKEN}\n"
-        >&2 echo -e "ERROR: failed to extract \"access_token\" field from authentication token JSON structure\n"
+        >&2 echo -e "ERROR: Failed to extract \"access_token\" field from authentication token JSON structure\n"
         return 1
     fi
     echo "${ACCESS_TOKEN}"
@@ -203,14 +198,15 @@ fi
 
 # query HSM for the Redfish endpoint discovery statuses
 CURL_CMD="curl -s -k -H \"Authorization: Bearer ${TOKEN}\" https://${TARGET}/apis/smd/hsm/v2/Inventory/RedfishEndpoints"
-timestamp_print "Testing '${CURL_CMD}'..."
+CURL_CMD_REDACTED="curl -s -k -H \"Authorization: Bearer <REDACTED>\" https://${TARGET}/apis/smd/hsm/v2/Inventory/RedfishEndpoints"
+timestamp_print "Testing '${CURL_CMD_REDACTED}'..."
 CURL_OUT=$(eval ${CURL_CMD})
 CURL_RET=$?
 if [[ ${CURL_RET} -ne 0 ]] ; then
-    >&2 echo "ERROR: '${CURL_CMD}' failed with status code: ${CURL_RET}"
+    >&2 echo "ERROR: '${CURL_CMD_REDACTED}' failed with status code: ${CURL_RET}"
     exit 1
 elif [[ -z "${CURL_OUT}" ]] ; then
-    >&2 echo "ERROR: '${CURL_CMD}' returned an empty response."
+    >&2 echo "ERROR: '${CURL_CMD_REDACTED}' returned an empty response."
     exit 1
 fi
 
@@ -220,7 +216,7 @@ timestamp_print "Processing response with: '${JQ_CMD}'..."
 PARSED_OUT=$(echo "${CURL_OUT}" | eval "${JQ_CMD}" 2> /dev/null)
 if [[ -z "${PARSED_OUT}" ]] ; then
     echo "${CURL_OUT}"
-    >&2 echo "ERROR: '${CURL_CMD}' returned a response with missing endpoint IDs or LastDiscoveryStatus fields"
+    >&2 echo "ERROR: '${CURL_CMD_REDACTED}' returned a response with missing endpoint IDs or LastDiscoveryStatus fields"
     exit 1
 fi
 
@@ -229,13 +225,13 @@ while read LINE ; do
     ID_CHECK=$(echo "${LINE}" | grep -E "\"ID\"")
     if [[ -z "${ID_CHECK}" ]] ; then
         echo "${LINE}"
-        >&2 echo "ERROR: '${CURL_CMD}' returned a response with missing endpoint ID fields"
+        >&2 echo "ERROR: '${CURL_CMD_REDACTED}' returned a response with missing endpoint ID fields"
         exit 1
     fi
     STATUS_CHECK=$(echo "${LINE}" | grep -E "\"LastDiscoveryStatus\"")
     if [[ -z "${STATUS_CHECK}" ]] ; then
         echo "${LINE}"
-        >&2 echo "ERROR: '${CURL_CMD}' returned a response with missing endpoint LastDiscoveryStatus fields"
+        >&2 echo "ERROR: '${CURL_CMD_REDACTED}' returned a response with missing endpoint LastDiscoveryStatus fields"
         exit 1
     fi
 done <<< "${PARSED_OUT}"
