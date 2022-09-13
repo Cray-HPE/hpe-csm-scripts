@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.39] - 2022-09-09
+### Changed
+ - Update hsm_discovery_status_test.sh to fix token leaks.
+ - Clean up run_hms_ct_tests.sh for shellcheck.
+
 ## [0.0.38] - 2022-07-25
 ### Changed
  - Add workaround to dns_records.py to allow for hostnames with _
