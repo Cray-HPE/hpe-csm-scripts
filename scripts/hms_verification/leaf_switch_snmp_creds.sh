@@ -3,7 +3,7 @@
 
 # MIT License
 # 
-# (C) Copyright [2021] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2021-2022] Hewlett Packard Enterprise Development LP
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -220,7 +220,9 @@ send \"exit\n\"
 		return 1
 	fi
 
- 	outtext2=$(expect -c "
+	outtext2=""
+	if [[ ! -z "${SNMPDelUser}" ]]; then
+ 		outtext2=$(expect -c "
 spawn ssh admin@${swname}
 expect \"password: \"
 send \"${MGMTPW}\n\"
@@ -236,22 +238,25 @@ expect \"# \"
 send \"exit\n\"
 ")
 
-	if [ $? -ne 0 ]; then
-		echo "Communication with $swname failed."
-		echo " "
-		echo "Communication log:"
-		echo " "
-		echo $outtext2
-		echo " "
-		return 1
+		if [ $? -ne 0 ]; then
+			echo "Communication with $swname failed."
+			echo " "
+			echo "Communication log:"
+			echo " "
+			echo $outtext2
+			echo " "
+			return 1
+		fi
 	fi
 
 	echo "Aruba switch $swname SNMP cred reset succeeded."
 
 	if (( debugLevel > 1 )); then
 		echo $outtext
-		echo " "
-		echo $outtext2
+		if [[ ! -z "${SNMPDelUser}" ]]; then
+			echo " "
+			echo $outtext2
+		fi
 	fi
 
 	return 0
@@ -357,8 +362,7 @@ fi
 
 if [[ -z "${SNMPDELUSER}" ]]; then
 	echo " "
-	echo -n "==> Enter 'bad' default SNMP user ID to remove: "
-	read SNMPDelUser
+	echo "Skipping user deletion, SNMPDELUSER not supplied or is empty."
 else
 	SNMPDelUser=${SNMPDELUSER}
 fi
@@ -410,8 +414,10 @@ else
 fi
 
 if (( debugLevel > 0 )); then
-	echo "Undesireable SNMP user ID: ${SNMPDelUser}"
 	echo "Adding new SNMP user ID: ${SNMPNewUser}"
+	if [[ ! -z "${SNMPDelUser}" ]]; then
+		echo "Undesireable SNMP user ID: ${SNMPDelUser}"
+	fi
 	echo "SNMP auth password: ${SNMPAuthPW}"
 	echo "SNMP priv password: ${SNMPPrivPW}"
 fi
