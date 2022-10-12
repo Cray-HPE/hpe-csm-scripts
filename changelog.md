@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.40] - 2022-10-12
+### Changed
+- Modify leaf_switch_snmp_creds.sh to not require a user to delete
+- 
 ## [0.0.39] - 2022-09-09
 ### Changed
  - Update hsm_discovery_status_test.sh to fix token leaks.
