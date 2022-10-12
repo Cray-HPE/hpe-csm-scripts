@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.0] - 2022-10-12
+### Changed
+- Modify leaf_switch_snmp_creds.sh to not require a user to delete
+
 ## [0.0.35] - 2022-06-08
 ### Changed
  - Add workaround for dns_records.py for hostnames that contain underscores.
