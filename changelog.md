@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.0] - 2022-10-26
+### Changed
+- verify_hsm_discovery.py now references troubleshooting documentation upon failure.
+
 ## [0.0.40] - 2022-10-12
 ### Changed
 - Modify leaf_switch_snmp_creds.sh to not require a user to delete

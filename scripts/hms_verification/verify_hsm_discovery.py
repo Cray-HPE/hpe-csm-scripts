@@ -639,6 +639,7 @@ def main():
 	numErrs += genMountainDetails(slsData, compData, rfepData)
 
 	if numErrs > 0:
+		print("\nFor interpreting and troubleshooting results, see https://github.com/Cray-HPE/docs-csm/blob/main/operations/validate_csm_health.md#221-interpreting-hsm-discovery-results\n")
 		return 1
 
 	return 0
