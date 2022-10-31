@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.1] - 2022-10-27
+### Changed
+- Fixed broken HSM CLI call in make_node_groups script.
+
 ## [0.4.0] - 2022-10-26
 ### Changed
 - verify_hsm_discovery.py now references troubleshooting documentation upon failure.
@@ -7,7 +11,7 @@
 ## [0.0.40] - 2022-10-12
 ### Changed
 - Modify leaf_switch_snmp_creds.sh to not require a user to delete
-- 
+
 ## [0.0.39] - 2022-09-09
 ### Changed
  - Update hsm_discovery_status_test.sh to fix token leaks.
