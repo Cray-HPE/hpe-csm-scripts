@@ -33,9 +33,9 @@ RPM_SOURCE_NAME ?= ${NAME}-${VERSION}
 RPM_BUILD_DIR ?= $(PWD)/dist/rpmbuild
 RPM_SOURCE_PATH := ${RPM_BUILD_DIR}/SOURCES/${RPM_SOURCE_NAME}.tar.bz2
 
-rpm: rpm_prepare rpm_package_source rpm_build_source rpm_build
+rpm: prepare rpm_package_source rpm_build_source rpm_build
 
-rpm_prepare:
+prepare:
 	rm -rf $(RPM_BUILD_DIR)
 	mkdir -p $(RPM_BUILD_DIR)/SPECS $(RPM_BUILD_DIR)/SOURCES
 	cp $(SPEC_FILE) $(RPM_BUILD_DIR)/SPECS/
