@@ -2,7 +2,7 @@
 
 # MIT License
 # 
-# (C) Copyright [2021] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2021-2022] Hewlett Packard Enterprise Development LP
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -25,7 +25,7 @@
 
 ctSmokeLog="/tmp/ct_smoke_log.txt"
 ctFuncLog="/tmp/ct_func_log.txt"
-HELP_URL="https://github.com/Cray-HPE/docs-csm/blob/main/troubleshooting/hms_ct_manual_run.md"
+HELP_URL="https://github.com/Cray-HPE/docs-csm/blob/release/1.2/troubleshooting/hms_ct_manual_run.md"
 
 echo "================================================================="
 echo "============  Running HMS CT Smoke Tests... ====================="
