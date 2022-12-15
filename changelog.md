@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.2] - 2022-12-15
+### Changed
+- Update run_hms_ct_tests.sh to point to the 1.2 CSM help docs
+
 ## [0.2.1] - 2022-12-15
 ### Changed
 - Fixed a variable that was not being set properly.
