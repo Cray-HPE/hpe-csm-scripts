@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.1] - 2022-12-15
+### Changed
+- Fixed a variable that was not being set properly.
+
 ## [0.2.0] - 2022-10-12
 ### Changed
 - Modify leaf_switch_snmp_creds.sh to not require a user to delete
