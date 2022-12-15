@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.3] - 2022-12-15
+### Changed
+- Fixed a variable that was not being set properly.
+
 ## [0.4.1] - 2022-10-27
 ### Changed
 - Fixed broken HSM CLI call in make_node_groups script.
