@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.2] - 2022-12-15
+## [0.4.3] - 2022-12-15
 ### Changed
 - Fixed a variable that was not being set properly.
 
