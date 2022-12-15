@@ -277,8 +277,10 @@ def main():
 
 		# Some components have no class at all.  Rubes!  Try to infer it.
 
-		if not "Class" in comp:
-			if comp['Type'] == "CabinetPDUController":
+		if "Class" in comp:
+			tclass = comp['Class']
+		else:
+			if comp['Type'] == "CabinetPDUController" or comp['Type'] == "CabinetPDUPowerConnector":
 				tclass = "River"
 			else:
 				if debugLevel > 2:
