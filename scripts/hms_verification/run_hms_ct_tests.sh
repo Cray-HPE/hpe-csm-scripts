@@ -2,7 +2,7 @@
 
 # MIT License
 # 
-# (C) Copyright [2022] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2022-2023] Hewlett Packard Enterprise Development LP
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -21,6 +21,12 @@
 # OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
+
+# This script runs one or more sets of CT tests for HMS services via 'helm test'.
+# When all HMS tests are invoked, they are executed in parallel and thus should
+# not include tests that would interfere with one another. By default, The Helm
+# charts for HMS services are configured to only run non-disruptive tests since
+# they are executed during installs and upgrades in the CSM health validation steps.
 
 # print_and_log <string>
 function print_and_log()
@@ -54,6 +60,7 @@ FAS_ARR=("fas" "cray-hms-firmware-action" 1 1)
 HBTD_ARR=("hbtd" "cray-hms-hbtd" 1 0)
 HMNFD_ARR=("hmnfd" "cray-hms-hmnfd" 1 0)
 HSM_ARR=("hsm" "cray-hms-smd" 1 1)
+PCS_ARR=("pcs" "cray-power-control" 1 1)
 REDS_ARR=("reds" "cray-hms-reds" 1 0)
 SCSD_ARR=("scsd" "cray-hms-scsd" 1 0)
 SLS_ARR=("sls" "cray-hms-sls" 1 1)
@@ -64,6 +71,7 @@ ALL_ARR=("${BSS_ARR[@]}" \
 "${HBTD_ARR[@]}" \
 "${HMNFD_ARR[@]}" \
 "${HSM_ARR[@]}" \
+"${PCS_ARR[@]}" \
 "${REDS_ARR[@]}" \
 "${SCSD_ARR[@]}" \
 "${SLS_ARR[@]}")
@@ -74,6 +82,7 @@ ${FAS_ARR[0]} \
 ${HBTD_ARR[0]} \
 ${HMNFD_ARR[0]} \
 ${HSM_ARR[0]} \
+${PCS_ARR[0]} \
 ${REDS_ARR[0]} \
 ${SCSD_ARR[0]} \
 ${SLS_ARR[0]}"
@@ -93,7 +102,7 @@ while getopts "hlt:" opt; do
            echo
            echo "Arguments:"
            echo "    -h        display this help message"
-           echo "    -l        list the hms services to test"
+           echo "    -l        list the hms services that can be tested"
            echo "    -t        test the specified service, must be one of:"
            echo "                  all ${ALL_SERVICES}"
            exit 0
@@ -109,6 +118,7 @@ while getopts "hlt:" opt; do
                "${HBTD_ARR[0]}" | \
                "${HMNFD_ARR[0]}" | \
                "${HSM_ARR[0]}" | \
+               "${PCS_ARR[0]}" | \
                "${REDS_ARR[0]}" | \
                "${SCSD_ARR[0]}" | \
                "${SLS_ARR[0]}")
@@ -177,7 +187,7 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
         TEST_DEPLOYMENT=${ALL_ARR[$((${i} + 1))]}
         TEST_SMOKE=${ALL_ARR[$((${i} + 2))]}
         TEST_FUNCTIONAL=${ALL_ARR[$((${i} + 3))]}
-        # some services only have smoke tests, others have additional functional tests
+        # some services only have smoke tests, others also have functional tests
         NUM_TESTS_EXPECTED=$((${TEST_SMOKE} + ${TEST_FUNCTIONAL}))
 
         # parse test output
@@ -238,13 +248,14 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
 else
     # data for service being tested
     case ${TEST_SERVICE} in
-        # some services only have smoke tests, others have additional functional tests
+        # some services only have smoke tests, others also have functional tests
         "${BSS_ARR[0]}") TEST_DEPLOYMENT="${BSS_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${BSS_ARR[2]} + ${BSS_ARR[3]})) ;;
       "${CAPMC_ARR[0]}") TEST_DEPLOYMENT="${CAPMC_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${CAPMC_ARR[2]} + ${CAPMC_ARR[3]})) ;;
         "${FAS_ARR[0]}") TEST_DEPLOYMENT="${FAS_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${FAS_ARR[2]} + ${FAS_ARR[3]})) ;;
        "${HBTD_ARR[0]}") TEST_DEPLOYMENT="${HBTD_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${HBTD_ARR[2]} + ${HBTD_ARR[3]})) ;;
       "${HMNFD_ARR[0]}") TEST_DEPLOYMENT="${HMNFD_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${HMNFD_ARR[2]} + ${HMNFD_ARR[3]})) ;;
         "${HSM_ARR[0]}") TEST_DEPLOYMENT="${HSM_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${HSM_ARR[2]} + ${HSM_ARR[3]})) ;;
+        "${PCS_ARR[0]}") TEST_DEPLOYMENT="${PCS_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${PCS_ARR[2]} + ${PCS_ARR[3]})) ;;
        "${REDS_ARR[0]}") TEST_DEPLOYMENT="${REDS_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${REDS_ARR[2]} + ${REDS_ARR[3]})) ;;
        "${SCSD_ARR[0]}") TEST_DEPLOYMENT="${SCSD_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${SCSD_ARR[2]} + ${SCSD_ARR[3]})) ;;
         "${SLS_ARR[0]}") TEST_DEPLOYMENT="${SLS_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${SLS_ARR[2]} + ${SLS_ARR[3]})) ;;
@@ -252,7 +263,7 @@ else
                exit 1 ;;
     esac
 
-    echo "Running ${TEST_SERVICE} test..."
+    echo "Running ${TEST_SERVICE} tests..."
     helm test -n services ${TEST_DEPLOYMENT} > ${LOG_PATH} 2>&1
 
     echo "DONE."
