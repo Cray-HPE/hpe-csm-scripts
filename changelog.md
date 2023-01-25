@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.4] - 2023-01-24
+### Changed
+- Added PCS to run_hms_ct_tests.sh script.
+
 ## [0.4.3] - 2022-12-15
 ### Changed
 - Fixed a variable that was not being set properly.
