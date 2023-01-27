@@ -28,6 +28,10 @@ import json
 from base64 import b64decode
 import requests
 from kubernetes import client, config
+import re
+import string
+from itertools import groupby
+from operator import itemgetter
 
 ##############################################################################
 # Generate per-cabinet details containing info on nodes, NodeBMCs, RouterBMCs,
@@ -61,13 +65,105 @@ from kubernetes import client, config
 # HPE PDUs are not expected to be discovered
 ##############################################################################
 
+# Node topology constants
+expected_node_topology = [
+	{
+		# Windom
+		"Models": ["WindomNodeCard", "WNC"],
+		"ExpectedBMCs": ["b0", "b1"],
+		"ExpectedNodes": ["b0n0", "b0n1", "b1n0", "b1n1"]
+	},
+	{
+		# Castle
+		"Models": ["CNC"],
+		"ExpectedBMCs": ["b0", "b1"],
+		"ExpectedNodes": ["b0n0", "b0n1", "b1n0", "b1n1"]
+	},
+	{
+		# Grizzly Peak
+		"Models": ["GrizzlyPkNodeCard"],
+		"ExpectedBMCs": ["b0"],
+		"ExpectedNodes": ["b0n0", "b0n1"]
+	},
+	{
+		# Bard Peak
+		"Models": ["BardPeakNC"],
+		"ExpectedBMCs": ["b0", "b1"],
+		"ExpectedNodes": ["b1n0", "b1n0"]
+	},
+	{
+		# Antero
+		"Models": ["ANTERO"],
+		"ExpectedBMCs": ["b0"],
+		"ExpectedNodes": ["b0n0", "b0n1", "b0n2", "b0n3"]
+
+	}
+]
+
+# Build a lookup table by model
+expected_node_topology_by_model = {}
+for node_topology in expected_node_topology:
+	for model in node_topology["Models"]:
+		expected_node_topology_by_model[model] = node_topology
+
+# Retrieve the corresponding node topology object for the given slot if it exists.
+def getExpectedNodeTopologyForSlot(slot_xname, nodeEnclosureInventoryData):
+	node_enclosure_xname = slot_xname + "e0"
+	
+	# Determine the current model for this slot. Need to check that each key exists, as its not guaranteed
+	# to exist
+	if node_enclosure_xname not in nodeEnclosureInventoryData:
+		return None
+	node_enclosure_data = nodeEnclosureInventoryData[node_enclosure_xname]
+	
+	if "PopulatedFRU" not in node_enclosure_data:
+		return None
+	
+	if "NodeEnclosureFRUInfo" not in node_enclosure_data["PopulatedFRU"]:
+		return None
+
+	if "Model" not in  node_enclosure_data["PopulatedFRU"]["NodeEnclosureFRUInfo"]:
+		return None
+		
+	# Check to see if know about this node model
+	model = node_enclosure_data["PopulatedFRU"]["NodeEnclosureFRUInfo"]["Model"]
+	if model not in expected_node_topology_by_model:
+		# print(f"{slot_xname} Model: {model} not found!")
+		return None
+	
+	return expected_node_topology_by_model[model]
+
+# Retrieve the expected nodes BMCs that should be present in the slot if node topology data exists.
+def getExpectedNodeBMCsForSlot(slot_xname, nodeEnclosureInventoryData):
+	expected_node_topology = getExpectedNodeTopologyForSlot(slot_xname, nodeEnclosureInventoryData)
+	if expected_node_topology is None:
+		return None
+
+	bmc_xnames = []
+	for bmc in expected_node_topology["ExpectedBMCs"]:
+		bmc_xnames.append(slot_xname+bmc)
+
+	return bmc_xnames
+
+# Retrieve the expected nodes that should be present in the slot if node topology data exists.
+def getExpectedNodesForSlot(slot_xname, nodeEnclosureInventoryData):
+	expected_node_topology = getExpectedNodeTopologyForSlot(slot_xname, nodeEnclosureInventoryData)
+	if expected_node_topology is None:
+		return None
+
+	node_xnames = []
+	for nodes in expected_node_topology["ExpectedNodes"]:
+		node_xnames.append(slot_xname+nodes)
+
+	return node_xnames
 
 # Data structure to contain cabinet info.
 
 class CabInfo():
-	def __init__(self, xn, xc):
+	def __init__(self, xn, xc, model):
 		self.xname = xn
 		self.xclass = xc
+		self.model = model
 
 # Create a k8s client object for use in getting auth tokena.
 
@@ -130,6 +226,12 @@ def getHSMRFEP(authToken):
 	rfepJSON, rstat = doRest(url, authToken)
 	return rfepJSON, rstat
 
+# Get HSM Hardware Inventory data for nodes
+
+def getHSMInventoryHardwareForNodeEnclosures(authTokens):
+	url = "https://api-gw-service-nmn.local/apis/smd/hsm/v2/Inventory/Hardware?Type=NodeEnclosure"
+	rfepJSON, rstat = doRest(url, authTokens)
+	return rfepJSON, rstat
 
 # Get SLS HW data
 
@@ -142,23 +244,24 @@ def getSLSHWData(authToken):
 # Returns a list of cabinets and their type (RV,MT,HILL).
 # This is taken from the SLS data.
 
-def getCabList(slsJSON):
+def getCabList(sls_hardware):
 	cabList = []
 
-	j = json.loads(slsJSON)
-
-	for comp in j:
+	for comp in sls_hardware:
 		if comp['TypeString'] == "Cabinet":
-			cabList.append(CabInfo(comp['Xname'], comp['Class']))
+			model = None
+			if "Model" in comp['ExtraProperties']:
+				model = comp['ExtraProperties']['Model']
+			cabList.append(CabInfo(comp['Xname'], comp['Class'], model))
 
 	return cabList
 
 
 # Given a BMC, return a list of connected mgmt port NICs.
 
-def findNodeNics(bmc, slsJSON):
+def findNodeNics(bmc, sls_hardware):
 	nics = []
-	for comp in slsJSON:
+	for comp in sls_hardware:
 		if not "ExtraProperties" in comp:
 			continue
 
@@ -171,23 +274,32 @@ def findNodeNics(bmc, slsJSON):
 
 	return nics
 
+# Xname helpers
+def get_component_parent(xname:str):
+    regex_cdu = "^d([0-9]+)$"
+    regex_cabinet = "^x([0-9]{1,4})$"
+    if re.match(regex_cdu, xname) is not None or re.match(regex_cabinet, xname) is not None:
+		# Parent of Cabinets and CDUs is the System s0
+        return "s0"
+
+    # Trim all trailing numbers, then in the result, trim all trailing
+	# letters.
+    return xname.rstrip(string.digits).rstrip(string.ascii_letters)
 
 # Convenience function, checks SLS components to see if they are present in
 # HSM component data, HSM RedfishEndpoint data, and if there is a mgmt port
 # associated with it in SLS.  Returns a message with relevant info.
 
-def doChecks(xclass, comp, bname, ctype, compJSON, rfepJSON, slsJSON):
+def doChecks(xclass, comp, bname, ctype, hsm_state_components, hsm_redfish_endpoints, sls_hardware):
 	noc = ""
 
 	# Check state components presence
-	flds = compJSON['Components']
-	filtered = list(filter(lambda f: (f['ID'] == bname), flds))
+	filtered = list(filter(lambda f: (f['ID'] == bname), hsm_state_components.values()))
 	if not filtered:
 		noc = "Not found in HSM Components"
 
 	# Check RF Endpoints presence
-	flds = rfepJSON['RedfishEndpoints']
-	filtered = list(filter(lambda f: (f['ID'] == bname), flds))
+	filtered = list(filter(lambda f: (f['ID'] == bname), hsm_redfish_endpoints.values()))
 	if not filtered:
 		if len(noc) > 0:
 			noc += "; "
@@ -195,7 +307,7 @@ def doChecks(xclass, comp, bname, ctype, compJSON, rfepJSON, slsJSON):
 
 	if xclass == "River":
 		# Check mgmt port connection
-		filtered = findNodeNics(bname, slsJSON)
+		filtered = findNodeNics(bname, sls_hardware)
 		if not filtered:
 			if len(noc) > 0:
 				noc += "; "
@@ -209,24 +321,22 @@ def doChecks(xclass, comp, bname, ctype, compJSON, rfepJSON, slsJSON):
 
 	return noc
 
-
 # Generate a per-cabinet summary containing numbers of nodes, BMCs, etc.
 # This needs to be gotten from HSM component data.  TODO: should we be using
 # the RF endpoints instead?
 
-def genSummary(slsData, compData):
-	cabList = getCabList(slsData)
+def genSummary(sls_hardware, hsm_state_components):
+	cabList = getCabList(sls_hardware)
 	# Sort by cab num
 	clSorted = sorted(cabList, key=lambda cab: cab.xname)
 
 	print("HSM Cabinet Summary")
 	print("===================")
 
-	cdata = json.loads(compData)
-
 	for cab in clSorted:
 		nodes = 0
 		nodebmcs = 0
+		cmcs = 0
 		rtrbmcs = 0
 		chassisbmcs = 0
 		cabpducontrollers = 0
@@ -234,7 +344,12 @@ def genSummary(slsData, compData):
 		mgmtNodes = 0
 		compNodes = 0
 
-		for comp in cdata['Components']:
+		computeModuleSlotsPopulated = 0
+		computeModuleSlotsEmpty = 0
+		routerModuleSlotsPopulated = 0
+		routerModuleSlotsEmpty = 0
+
+		for comp in hsm_state_components.values():
 			if not comp['ID'].startswith(cab.xname):
 				continue
 
@@ -247,6 +362,8 @@ def genSummary(slsData, compData):
 					mgmtNodes += 1
 				elif comp['Role'] == "Application":
 					appNodes += 1
+			elif ctype == "NodeBMC" and comp['ID'].endswith("b999"):
+				cmcs += 1
 			elif ctype == "NodeBMC":
 				nodebmcs += 1
 			elif ctype == "RouterBMC":
@@ -255,8 +372,21 @@ def genSummary(slsData, compData):
 				chassisbmcs += 1
 			elif ctype == "CabinetPDUController":
 				cabpducontrollers += 1
+			elif ctype == "ComputeModule":
+				if comp["State"] == "Empty":
+					computeModuleSlotsEmpty += 1
+				else:
+					computeModuleSlotsPopulated += 1
+			elif ctype == "RouterModule":
+				if comp["State"] == "Empty":
+					routerModuleSlotsEmpty  += 1
+				else:
+					routerModuleSlotsPopulated += 1
 
-		print("%s (%s)" % (cab.xname, cab.xclass))
+		cabinet_description = cab.xclass
+		if cab.model is not None:
+			cabinet_description += " - " + cab.model
+		print("%s (%s)" % (cab.xname, cabinet_description))
 		if cab.xclass == "River":
 			print("  Discovered Nodes:         %3d (%d Mgmt, %d Application, %d Compute)" %
 				(nodes, mgmtNodes, appNodes, compNodes))
@@ -266,332 +396,189 @@ def genSummary(slsData, compData):
 		print("  Discovered Node BMCs:     %3d" % (nodebmcs))
 		print("  Discovered Router BMCs:   %3d" % (rtrbmcs))
 		print("  Discovered Chassis BMCs:  %3d" % (chassisbmcs))
-		if cab.xclass == "River":
+		if cab.xclass == "River" or cab.model == "EX2500":
 			print("  Discovered Cab PDU Ctlrs: %3d" % (cabpducontrollers))
+			print("  Discovered CMCs:          %3d" % (cmcs))
+		if cab.xclass in ["Hill", "Mountain"]:
+			print("  Compute Module slots")
+			print("    Populated: %3d" % (computeModuleSlotsPopulated))
+			print("    Empty:     %3d" % (computeModuleSlotsEmpty))
+			print("  Router Module slots")
+			print("    Populated: %3d" % (routerModuleSlotsPopulated))
+			print("    Empty:     %3d" % (routerModuleSlotsEmpty))
 
 	print("")
 
 
-# Generate River cabinet detailed report.
-
-def genRiverDetails(slsData, compData, rfepData):
+def genCabinetDetails(sls_hardware, hsm_state_components, hsm_redfish_endpoints, hsm_inventory_node_enclosures, cabinet_selector, check_river_specific_hardware=False, check_mountain_specific_hardware=False):
 	numErrs = 0
 
-	slsJSON = json.loads(slsData)
-	compJSON = json.loads(compData)
-	rfepJSON = json.loads(rfepData)
-
-	cabList = getCabList(slsData)
+	cabList = getCabList(sls_hardware)
 	# Sort by cab num
 	clSorted = sorted(cabList, key=lambda cab: cab.xname)
-
-	print("River Cabinet Checks")
-	print("====================")
-
-	for cab in clSorted:
-		errs = []
-
-		# For each cab, filter for river class, ignore mountain/hill.
-		if cab.xclass != "River":
-			continue
-
-		print("%s" % (cab.xname))
-
-		# Iterate all nodes in SLS.  Check for not present in comps/rfeps,
-		# mgmt ports.  Any missing/mismatch is a FAIL.
-
-		nodes = list(filter(lambda f: (f['TypeString'] == "Node"), slsJSON))
-		for comp in nodes:
-			if not comp['Xname'].startswith(cab.xname):
-				continue
-
-			flds = compJSON['Components']
-			filtered = list(filter(lambda f: (f['ID'] == comp['Xname']), flds))
-			if not filtered:
-				# Not all river nodes have NIDs, so check for that.
-				nidStr = "N/A"
-				if "NID" in comp['ExtraProperties']:
-					nidStr = "%d" % (comp['ExtraProperties']['NID'])
-
-				errs.append("- %s (%s, NID %s) - Not found in HSM Components." %
-					(comp['Xname'], comp['ExtraProperties']['Role'], nidStr))
-
-		# Print out the node info.
-		if not errs:
-			print("  Nodes: PASS")
-		else:
-			numErrs += 1
-			print("  Nodes: FAIL")
-			for emsg in errs:
-				print("    %s" % (emsg))
-
-
-		# Iterate NodeBMCs in SLS.  This is tricky, the SLS data doesn't have
-		# node BMCs, need to infer them from the nodes using the Parent field.
-		# Check for presence in comps/RFEPs and mgmt ports, mismatches == FAIL.
-		# If no mgmt port, check if it's a mgmt NCN and if so, report it as
-		# info.
-
-		errs = []
-		warns = []
-		mappedComps = {}
-
-		for comp in nodes:
-			if not comp['Xname'].startswith(cab.xname):
-				continue
-
-			bname = comp['Parent']
-			if bname in mappedComps:
-				continue
-
-			mappedComps[bname] = True
-			noc = doChecks(cab.xclass, comp, bname, "NodeBMC", compJSON, rfepJSON, slsJSON)
-
-			if len(noc) > 0:
-				if "BMC of mgmt node" in noc:
-					warns.append("- %s - %s." % (bname, noc))
-				else:
-					errs.append("- %s - %s." % (bname, noc))
-
-		# Print out the Node BMC info.
-		if len(errs) > 0:
-			numErrs += 1
-			print("  NodeBMCs: FAIL")
-			for emsg in errs:
-				print("    %s" % (emsg))
-
-		if len(warns) > 0:
-			print("  NodeBMCs: WARNING")
-			for emsg in warns:
-				print("    %s" % (emsg))
-
-		if not errs and not warns:
-			print("  NodeBMCs: PASS")
-
-
-		# Iterate RouterBMCs in SLS.  Easy since SLS data contains these
-		# directly.  Check for comps/RFEP/mgmt ports.  Mismatches == FAIL.
-
-		errs = []
-
-		rtrs = list(filter(lambda f: (f['TypeString'] == "RouterBMC"), slsJSON))
-		for comp in rtrs:
-			bname = comp['Xname']
-			if not bname.startswith(cab.xname):
-				continue
-
-			noc = doChecks(cab.xclass, comp, bname, "RouterBMC", compJSON, rfepJSON, slsJSON)
-
-			if len(noc) > 0:
-				errs.append("- %s - %s." % (bname, noc))
-
-		# Print out the Node BMC info.
-		if not errs:
-			print("  RouterBMCs: PASS")
-		else:
-			numErrs += 1
-			print("  RouterBMCs: FAIL")
-			for emsg in errs:
-				print("    %s" % (emsg))
-
-
-		# Iterate ChassisBMCs in SLS.  These are really GB CMCs.
-
-		errs = []
-
-		rtrs = list(filter(lambda f: (f['TypeString'] == "ChassisBMC"), slsJSON))
-		for comp in rtrs:
-			bname = comp['Xname']
-			if not bname.startswith(cab.xname):
-				continue
-
-			noc = doChecks(cab.xclass, comp, bname, "ChassisBMC", compJSON, rfepJSON, slsJSON)
-
-			if len(noc) > 0:
-				errs.append("- %s - %s." % (bname, noc))
-
-		# Print out the Node BMC info.
-		if not errs:
-			print("  ChassisBMCs/CMCs: PASS")
-		else:
-			numErrs += 1
-			print("  ChassisBMCs/CMCs: FAIL")
-			for emsg in errs:
-				print("    %s" % (emsg))
-
-
-		# Check CabPDUControllers in SLS.  Check comps/RFEP.  Mgmt port?
-		# Mismatches are WARNING.
-
-		errs = []
-
-		pdus = list(filter(lambda f: (f['TypeString'] == "CabinetPDUController"), slsJSON))
-		for comp in pdus:
-			bname = comp['Xname']
-			if not bname.startswith(cab.xname):
-				continue
-
-			noc = doChecks(cab.xclass, comp, bname, "CabinetPDUController", compJSON, rfepJSON, slsJSON)
-			if len(noc) > 0:
-				errs.append("- %s - %s." % (bname, noc))
-
-		# Print out the Node BMC info.
-		if not errs:
-			print("  CabinetPDUControllers: PASS")
-		else:
-			print("  CabinetPDUControllers: WARNING")
-			for emsg in errs:
-				print("    %s" % (emsg))
-
-
-
-	print("")
-	return numErrs
-
-
-# Generate Mountain/Hill cabinet detailed report.
-
-def genMountainDetails(slsData, compData, rfepData):
-	numErrs = 0
-
-	slsJSON = json.loads(slsData)
-	compJSON = json.loads(compData)
-	rfepJSON = json.loads(rfepData)
-
-	cabList = getCabList(slsData)
-	# Sort by cab num
-	clSorted = sorted(cabList, key=lambda cab: cab.xname)
-
-	print("Mountain/Hill Cabinet Checks")
-	print("============================")
 
 	numCabs = 0
-
 	for cab in clSorted:
-		# For each cab, filter for river class, ignore mountain/hill.
-		if cab.xclass == "River":
+		# Check to see if this cabinet should be checked
+		if not cabinet_selector(cab):
 			continue
 
 		numCabs += 1
-		print("%s (%s)" % (cab.xname, cab.xclass))
 
+		cabinet_description = cab.xclass
+		if cab.model is not None:
+			cabinet_description += " - " + cab.model
+		print("%s (%s)" % (cab.xname, cabinet_description))
 
-		# Check ChassisBMCs.  All 8 must be present in each cabinet for
-		# Mountain, c1 and c3 must be present for Hill.  NOTE!!!  It is assumed
-		# that the SLS data contains all requisite ChassisBMCs and this app
-		# does not have to verify the counts or e.g. that c1 and c3 are both
-		# present in SLS for Hill.
+		if check_mountain_specific_hardware:
+			#
+			# Chassis BMCs
+			#
 
-		errs = []
-		nodes = list(filter(lambda f: (f['TypeString'] == "ChassisBMC"), slsJSON))
-		for comp in nodes:
-			# ChassisBMC names in SLS and HSM components don't have the 'bX'
-			# suffix, but they do in the RFEP data.  Yuck, can't use the
-			# convenience func...
-			bname = comp['Xname']
-			if not bname.startswith(cab.xname):
-				continue
+			# Check ChassisBMCs.  All 8 must be present in each cabinet for
+			# Mountain (EX3000/EX4000), c1 and c3 must be present for Hill 
+			# EX2000, and EX2500 cabinets can have 1, 2 or 3.
+			# NOTE!!!  
+			# It is assumed that the SLS data contains all requisite ChassisBMCs 
+			# and this app does not have to verify the counts or e.g. that c1 
+			# and c3 are both present in SLS for Hill (EX2000).
 
-			noc = ""
+			errs = []
+			chassis_bmcs = list(filter(lambda f: (f['TypeString'] == "ChassisBMC"), sls_hardware))
+			for chassis_bmc in chassis_bmcs:
+				chassis_bmc_xname = chassis_bmc["Xname"]
 
-			# Check state components presence
-			flds = compJSON['Components']
-			filtered = list(filter(lambda f: (f['ID'] == bname), flds))
-			if not filtered:
-				noc = "Not found in HSM Components"
+				error_msgs = []
 
-			# Check RF Endpoints presence
-			flds = rfepJSON['RedfishEndpoints']
-			filtered = list(filter(lambda f: (f['ID'] == bname), flds))
-			if not filtered:
-				if len(noc) > 0:
-					noc += "; "
-				noc += "Not found in HSM Redfish Endpoints"
+				# Check state components presence
+				if chassis_bmc_xname not in hsm_state_components:
+					error_msgs.append("Not found in HSM Components")
 
+				# Check RF Endpoints presence
+				if chassis_bmc_xname not in hsm_redfish_endpoints:
+					error_msgs.append("Not found in HSM Redfish Endpoints")
 
-			if len(noc) > 0:
-				errs.append("- %s - %s." % (bname, noc))
+				if len(error_msgs) > 0:
+					errs.append("- %s - %s." % (chassis_bmc_xname, '; '.join(error_msgs)))
 
-		# Print out the Chassis BMC info.
-		if not errs:
-			print("  ChassisBMCs: PASS")
-		else:
-			numErrs += 1
-			print("  ChassisBMCs: FAIL")
-			for emsg in errs:
-				print("    %s" % (emsg))
+			# Print out the Chassis BMC info.
+			if not errs:
+				print("  ChassisBMCs: PASS")
+			else:
+				numErrs += 1
+				print("  ChassisBMCs: FAIL")
+				for emsg in errs:
+					print("    %s" % (emsg))
 
+		#
+		# Nodes
+		#
 
 		# Check Nodes.  Missing == WARNING.
 
 		# Iterate all nodes in SLS.  Check for not present in comps/rfeps,
 		# mgmt ports.  Any missing/mismatch is a FAIL.
-
 		errs = []
-		nodes = list(filter(lambda f: (f['TypeString'] == "Node"), slsJSON))
-		for comp in nodes:
-			bname = comp['Xname']
-			if not bname.startswith(cab.xname):
+		nodes = list(filter(lambda f: (f['TypeString'] == "Node"), sls_hardware))
+		for node in nodes:
+			node_xname = node['Xname']
+			if not node_xname.startswith(cab.xname):
 				continue
 
-			flds = compJSON['Components']
-			filtered = list(filter(lambda f: (f['ID'] == comp['Xname']), flds))
-			if not filtered:
-				errs.append("- %s (%s, NID %d) - Not found in HSM Components." %
-					(comp['Xname'], comp['ExtraProperties']['Role'],
-					comp['ExtraProperties']['NID']))
+			if node_xname not in hsm_state_components:
+				# Check to see if the slot is populated
+				bmc_xname = get_component_parent(node_xname)
+				slot_xname = get_component_parent(bmc_xname)
+
+				# Ignore empty slots
+				if slot_xname in hsm_state_components and hsm_state_components[slot_xname]["State"] == "Empty":
+					continue
+
+				# Check to see if this node is expected to be present based on the node enclosure
+				expected_bmcs = getExpectedNodesForSlot(slot_xname, hsm_inventory_node_enclosures)
+				if expected_bmcs is not None:
+					if bmc_xname not in expected_bmcs:
+						continue
+
+				# Not all nodes have NIDs, so check for that.
+				nidStr = "N/A"
+				if "NID" in node['ExtraProperties']:
+					nidStr = "%d" % (node['ExtraProperties']['NID'])
+				aliasString = "N/A"
+				if "Aliases" in node['ExtraProperties']:
+					aliasString = ", ".join(node['ExtraProperties']["Aliases"])
+
+				errs.append("- %s (%s, NID %s, Alias %s) - Not found in HSM Components." %
+					(node_xname, node['ExtraProperties']['Role'], nidStr, aliasString))
 
 		# Print out the node info.
 		if not errs:
 			print("  Nodes: PASS")
 		else:
-			print("  Nodes: WARNING")
+			print("  Nodes: FAIL")
 			for emsg in errs:
 				print("    %s" % (emsg))
-
 
 		# Check NodeBMCs.  Missing == WARNING.  This is tricky, the SLS data
 		# doesn't have node BMCs, need to infer them from the nodes using the
 		# Parent field.  Check for presence in comps/RFEPs and mgmt ports,
 		# mismatches == WARNING.
 		# if so, report it as info.
-
 		errs = []
 		mappedComps = {}
+		for node in nodes:
+			node_xname = node['Xname']
+			if not node_xname.startswith(cab.xname):
+				continue
+			
+			# Determine xnames
+			bmc_xname = node['Parent']
+			slot_xname = get_component_parent(bmc_xname)
 
-		for comp in nodes:
-			if not comp['Xname'].startswith(cab.xname):
+			# Check to see if we have already processes this BMC before
+			if bmc_xname in mappedComps:
+				continue
+			mappedComps[bmc_xname] = True
+
+			# Check to see if this is ncn-m001's BMC. If so than ignore it if its BMC is not connected to the HMN
+			if "ncn-m001" in node["ExtraProperties"]["Aliases"] and len(findNodeNics(bmc_xname, sls_hardware)) == 0:
 				continue
 
-			bname = comp['Parent']
-			if bname in mappedComps:
+			# Ignore empty slots. If a slot is empty then there is no blade present.
+			# print(f"Node BMC Slot: {slot_xname}")
+			if slot_xname in hsm_state_components and hsm_state_components[slot_xname]["State"] == "Empty":
 				continue
 
-			mappedComps[bname] = True
-			noc = doChecks(cab.xclass, comp, bname, "NodeBMC", compJSON, rfepJSON, slsJSON)
+			# Check to see if this node is expected to be present based on the node enclosure
+			expected_bmcs = getExpectedNodeBMCsForSlot(slot_xname, hsm_inventory_node_enclosures)
+			# print(f"Expected Node BMCs for {slot_xname}: {expected_bmcs}")
+			if expected_bmcs is not None:
+				if bmc_xname not in expected_bmcs:
+					# print("Ignoring NodeBMC as its not expected to be present")
+					continue
+
+			noc = doChecks(cab.xclass, node, bmc_xname, "NodeBMC", hsm_state_components, hsm_redfish_endpoints, sls_hardware)
 
 			if len(noc) > 0:
-				errs.append("- %s - %s." % (bname, noc))
+				errs.append("- %s - %s." % (bmc_xname, noc))
 
 		# Print out the Node BMC info.
 		if not errs:
 			print("  NodeBMCs: PASS")
 		else:
-			print("  NodeBMCs: WARNING")
+			print("  NodeBMCs: FAIL")
 			for emsg in errs:
 				print("    %s" % (emsg))
 
-
 		# Check RouterBMCs.  Missing == WARNING.
-
 		errs = []
-		nodes = list(filter(lambda f: (f['TypeString'] == "RouterBMC"), slsJSON))
-		for comp in nodes:
-			bname = comp['Xname']
+		router_bmcs = list(filter(lambda f: (f['TypeString'] == "RouterBMC"), sls_hardware))
+		for router_bmc in router_bmcs:
+			bname = router_bmc['Xname']
 			if not bname.startswith(cab.xname):
 				continue
 
-			noc = doChecks(cab.xclass, comp, bname, "RouterBMC", compJSON, rfepJSON, slsJSON)
+			noc = doChecks(cab.xclass, router_bmc, bname, "RouterBMC", hsm_state_components, hsm_redfish_endpoints, sls_hardware)
 			if len(noc) > 0:
 				errs.append("- %s - %s." % (bname, noc))
 
@@ -604,12 +591,59 @@ def genMountainDetails(slsData, compData, rfepData):
 			for emsg in errs:
 				print("    %s" % (emsg))
 
+		if check_river_specific_hardware:
+			# Check Gigabyte CMCs
+			errs = []
+			gigabyte_cmcs = list(filter(lambda f: (f['Xname'].endswith("b999")), sls_hardware))
+			for gigabyte_cmc in gigabyte_cmcs:
+				gigabyte_cmc_xname = gigabyte_cmc['Xname']
+				if not gigabyte_cmc_xname.startswith(cab.xname):
+					continue
+
+				noc = doChecks(cab.xclass, gigabyte_cmc, bname, "ChassisBMC", hsm_state_components, hsm_redfish_endpoints, sls_hardware)
+
+				# Check to see if this is a "phantom Intel CMC", which shows up for intel compute nodes but is
+				# not a real device.
+				if len(findNodeNics(gigabyte_cmc_xname, sls_hardware)) == 0:
+					continue
+
+				if len(noc) > 0:
+					errs.append("- %s - %s." % (bname, noc))
+
+			# Print out CMC info
+			if not errs:
+				print("  CMCs: PASS")
+			else:
+				numErrs += 1
+				print("  CMCs: FAIL")
+				for emsg in errs:
+					print("    %s" % (emsg))
+
+			# Check CabPDUControllers in SLS.  Check comps/RFEP.  Mgmt port?
+			# Mismatches are FAIL.
+			pdus = list(filter(lambda f: (f['TypeString'] == "CabinetPDUController"), sls_hardware))
+			for pdu in pdus:
+				bname = pdu['Xname']
+				if not bname.startswith(cab.xname):
+					continue
+
+				noc = doChecks(cab.xclass, pdu, bname, "CabinetPDUController",  hsm_state_components, hsm_redfish_endpoints, sls_hardware)
+				if len(noc) > 0:
+					errs.append("- %s - %s." % (bname, noc))
+
+			# Print out the Cabomet PDU Controller info.
+			if not errs:
+				print("  CabinetPDUControllers: PASS")
+			else:
+				print("  CabinetPDUControllers: FAIL")
+				for emsg in errs:
+					print("    %s" % (emsg))
+
 	if numCabs == 0:
 		print("None Found.")
 
 	print("")
 	return numErrs
-
 
 # Entry point
 
@@ -619,24 +653,71 @@ def main():
 		print("ERROR: No/empty auth token, can't continue.")
 		return 1
 
-	compData, stat = getHSMComponents(authToken)
+	hsm_state_components_raw, stat = getHSMComponents(authToken)
 	if stat != 0:
 		print("HSM components returned non-zero.")
 		return 1
 
-	rfepData, stat = getHSMRFEP(authToken)
+	# Put HSM State components into a map
+	hsm_state_components = {}
+	for component in json.loads(hsm_state_components_raw)['Components']:
+		hsm_state_components[component["ID"]] = component
+
+	# Retrieve HSM Redfish information data
+	hsm_redfish_endpoints_raw, stat = getHSMRFEP(authToken)
 	if stat != 0:
 		print("HSM RFEPs returned non-zero.")
 		return 1
+	
+	# Put HSM RedfishEndpoints into a map
+	hsm_redfish_endpoints = {}
+	for redfish_endpoint in json.loads(hsm_redfish_endpoints_raw)['RedfishEndpoints']:
+		hsm_redfish_endpoints[redfish_endpoint["ID"]] = redfish_endpoint
 
-	slsData, stat = getSLSHWData(authToken)
+
+	# Retrieve HSM node enclosure inventory data
+	hsm_inventory_node_enclosures_raw, stat = getHSMInventoryHardwareForNodeEnclosures(authToken)
 	if stat != 0:
-		print("SLS data returned non-zero.")
+		print("HSM Inventory Hardware data for nodes returned non-zero.")
 		return 1
 
-	genSummary(slsData, compData)
-	numErrs =  genRiverDetails(slsData, compData, rfepData)
-	numErrs += genMountainDetails(slsData, compData, rfepData)
+	# Put HSM node enclosure inventory data into a map
+	hsm_inventory_node_enclosures = {}
+	for node_enclosure in json.loads(hsm_inventory_node_enclosures_raw):
+		hsm_inventory_node_enclosures[node_enclosure["ID"]] = node_enclosure
+	
+
+	sls_hardware_raw, stat = getSLSHWData(authToken)
+	if stat != 0:
+		print("SLS hardware data returned non-zero.")
+		return 1
+	sls_hardware = json.loads(sls_hardware_raw)
+
+	genSummary(sls_hardware, hsm_state_components)
+
+	print("River Cabinet Checks")
+	print("============================")
+	numErrs = genCabinetDetails(sls_hardware, hsm_state_components, hsm_redfish_endpoints, hsm_inventory_node_enclosures,
+		lambda cab: cab.xclass == "River",
+		check_river_specific_hardware=True,
+		check_mountain_specific_hardware=False
+	)
+
+	print("Mountain/Hill Cabinet Checks")
+	print("============================")
+	numErrs += genCabinetDetails(sls_hardware, hsm_state_components, hsm_redfish_endpoints, hsm_inventory_node_enclosures,
+		lambda cab: cab.xclass == "Mountain" or (cab.xclass == "Hill" and cab.model != "EX2500"),
+		check_river_specific_hardware=False,
+		check_mountain_specific_hardware=True
+	)
+
+	print("EX2500 Cabinet Checks")
+	print("============================")
+	numErrs += genCabinetDetails(sls_hardware, hsm_state_components, hsm_redfish_endpoints, hsm_inventory_node_enclosures,
+		lambda cab: cab.xclass == "Hill" and cab.model == "EX2500",
+		check_river_specific_hardware=True,
+		check_mountain_specific_hardware=True
+	)
 
 	if numErrs > 0:
 		print("\nFor interpreting and troubleshooting results, see https://github.com/Cray-HPE/docs-csm/blob/main/operations/validate_csm_health.md#221-interpreting-hsm-discovery-results\n")
