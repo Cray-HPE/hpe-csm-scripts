@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.5]
+### Changed
+- The verify_hsm_discovery.py script now properly supports EX2500 cabinets.
+
 ## [0.4.4] - 2023-01-24
 ### Changed
 - Added PCS to run_hms_ct_tests.sh script.
