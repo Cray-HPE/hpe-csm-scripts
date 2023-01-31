@@ -53,17 +53,17 @@ trap 'if [[ -f ${LOG_PATH} ]]; then \
       fi; \
       exit 1' SIGHUP SIGINT SIGTERM
 
-# service name, helm deployment, smoke tests bool, functional tests bool
-BSS_ARR=("bss" "cray-hms-bss" 1 1)
-CAPMC_ARR=("capmc" "cray-hms-capmc" 1 1)
-FAS_ARR=("fas" "cray-hms-firmware-action" 1 1)
-HBTD_ARR=("hbtd" "cray-hms-hbtd" 1 0)
-HMNFD_ARR=("hmnfd" "cray-hms-hmnfd" 1 0)
-HSM_ARR=("hsm" "cray-hms-smd" 1 1)
-PCS_ARR=("pcs" "cray-power-control" 1 1)
-REDS_ARR=("reds" "cray-hms-reds" 1 0)
-SCSD_ARR=("scsd" "cray-hms-scsd" 1 0)
-SLS_ARR=("sls" "cray-hms-sls" 1 1)
+# service name, helm deployment, smoke tests bool, functional tests bool, helm filter args
+BSS_ARR=("bss" "cray-hms-bss" 1 1 "none")
+CAPMC_ARR=("capmc" "cray-hms-capmc" 1 1 "none")
+FAS_ARR=("fas" "cray-hms-firmware-action" 1 1 "none")
+HBTD_ARR=("hbtd" "cray-hms-hbtd" 1 0 "none")
+HMNFD_ARR=("hmnfd" "cray-hms-hmnfd" 1 0 "none")
+HSM_ARR=("hsm" "cray-hms-smd" 1 1 "name=cray-hms-smd-test-smoke,name=cray-hms-smd-test-functional")
+PCS_ARR=("pcs" "cray-power-control" 1 1 "none")
+REDS_ARR=("reds" "cray-hms-reds" 1 0 "none")
+SCSD_ARR=("scsd" "cray-hms-scsd" 1 0 "none")
+SLS_ARR=("sls" "cray-hms-sls" 1 1 "none")
 
 ALL_ARR=("${BSS_ARR[@]}" \
 "${CAPMC_ARR[@]}" \
@@ -154,9 +154,14 @@ echo "Log file for run is: ${LOG_PATH}"
 if [[ ${TEST_SERVICE} == "all" ]]; then
     NUM_TEST_SERVICES=0
     echo "Running all tests..."
-    for i in $(seq 0 4 $((${#ALL_ARR[@]} - 1))); do
+    for i in $(seq 0 5 $((${#ALL_ARR[@]} - 1))); do
         TEST_DEPLOYMENT=${ALL_ARR[$((${i} + 1))]}
-        helm test -n services ${TEST_DEPLOYMENT} >> ${LOG_PATH} 2>&1 &
+        FILTER_ARGS=${ALL_ARR[$((${i} + 4))]}
+        if [[ "${FILTER_ARGS}" == "none" ]]; then
+            helm test -n services ${TEST_DEPLOYMENT} >> ${LOG_PATH} 2>&1 &
+        else
+            helm test -n services ${TEST_DEPLOYMENT} --filter ${FILTER_ARGS} >> ${LOG_PATH} 2>&1 &
+        fi
         ((NUM_TEST_SERVICES++))
     done
     wait
@@ -181,7 +186,7 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
     NUM_SERVICES_FAILED=0
 
     # evaluate which tests passed and failed
-    for i in $(seq 0 4 $((${#ALL_ARR[@]} - 1))); do
+    for i in $(seq 0 5 $((${#ALL_ARR[@]} - 1))); do
         # data for service being tested
         TEST_SERVICE=${ALL_ARR[${i}]}
         TEST_DEPLOYMENT=${ALL_ARR[$((${i} + 1))]}
@@ -189,6 +194,7 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
         TEST_FUNCTIONAL=${ALL_ARR[$((${i} + 3))]}
         # some services only have smoke tests, others also have functional tests
         NUM_TESTS_EXPECTED=$((${TEST_SMOKE} + ${TEST_FUNCTIONAL}))
+        NUM_TESTS_PASSED=0
 
         # parse test output
         TEST_OUTPUT=$(echo "${ALL_OUTPUT}" | sed -n '/^NAME: '${TEST_DEPLOYMENT}'/,/^NAME:/p')
@@ -207,8 +213,23 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
             fi
         fi
 
-        # check for pass or fail result
-        NUM_TESTS_PASSED=$(echo "${TEST_OUTPUT}" | grep -E "Phase:.*Succeeded" | wc -l | tr -d " ")
+        # parse smoke test output
+        if [[ ${TEST_SMOKE} -eq 1 ]]; then
+            TEST_SUITE_SMOKE_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/^TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-smoke/,/^Phase:/p')
+            TEST_SUITE_SMOKE_PASS_CHECK=$(echo "${TEST_SUITE_SMOKE_OUTPUT}" | grep -E "Phase:.*Succeeded" | wc -l | tr -d " ")
+            if [[ ${TEST_SUITE_SMOKE_PASS_CHECK} -eq 1 ]]; then
+                ((NUM_TESTS_PASSED++))
+            fi
+        fi
+
+        # parse functional test output
+        if [[ ${TEST_FUNCTIONAL} -eq 1 ]]; then
+            TEST_SUITE_FUNCTIONAL_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/^TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-functional/,/^Phase:/p')
+            TEST_SUITE_FUNCTIONAL_PASS_CHECK=$(echo "${TEST_SUITE_FUNCTIONAL_OUTPUT}" | grep -E "Phase:.*Succeeded" | wc -l | tr -d " ")
+            if [[ ${TEST_SUITE_FUNCTIONAL_PASS_CHECK} -eq 1 ]]; then
+                ((NUM_TESTS_PASSED++))
+            fi
+        fi
 
         # track the test result
         if [[ ${NUM_TESTS_PASSED} -eq ${NUM_TESTS_EXPECTED} ]]; then
@@ -248,23 +269,69 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
 else
     # data for service being tested
     case ${TEST_SERVICE} in
-        # some services only have smoke tests, others also have functional tests
-        "${BSS_ARR[0]}") TEST_DEPLOYMENT="${BSS_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${BSS_ARR[2]} + ${BSS_ARR[3]})) ;;
-      "${CAPMC_ARR[0]}") TEST_DEPLOYMENT="${CAPMC_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${CAPMC_ARR[2]} + ${CAPMC_ARR[3]})) ;;
-        "${FAS_ARR[0]}") TEST_DEPLOYMENT="${FAS_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${FAS_ARR[2]} + ${FAS_ARR[3]})) ;;
-       "${HBTD_ARR[0]}") TEST_DEPLOYMENT="${HBTD_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${HBTD_ARR[2]} + ${HBTD_ARR[3]})) ;;
-      "${HMNFD_ARR[0]}") TEST_DEPLOYMENT="${HMNFD_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${HMNFD_ARR[2]} + ${HMNFD_ARR[3]})) ;;
-        "${HSM_ARR[0]}") TEST_DEPLOYMENT="${HSM_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${HSM_ARR[2]} + ${HSM_ARR[3]})) ;;
-        "${PCS_ARR[0]}") TEST_DEPLOYMENT="${PCS_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${PCS_ARR[2]} + ${PCS_ARR[3]})) ;;
-       "${REDS_ARR[0]}") TEST_DEPLOYMENT="${REDS_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${REDS_ARR[2]} + ${REDS_ARR[3]})) ;;
-       "${SCSD_ARR[0]}") TEST_DEPLOYMENT="${SCSD_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${SCSD_ARR[2]} + ${SCSD_ARR[3]})) ;;
-        "${SLS_ARR[0]}") TEST_DEPLOYMENT="${SLS_ARR[1]}" ; NUM_TESTS_EXPECTED=$((${SLS_ARR[2]} + ${SLS_ARR[3]})) ;;
+        # services may or may not have smoke tests, functional tests, and helm filter arguments
+        "${BSS_ARR[0]}") TEST_DEPLOYMENT="${BSS_ARR[1]}"
+                         TEST_SMOKE="${BSS_ARR[2]}"
+                         TEST_FUNCTIONAL="${BSS_ARR[3]}"
+                         NUM_TESTS_EXPECTED=$((${BSS_ARR[2]} + ${BSS_ARR[3]}))
+                         FILTER_ARGS="${BSS_ARR[4]}" ;;
+      "${CAPMC_ARR[0]}") TEST_DEPLOYMENT="${CAPMC_ARR[1]}"
+                         TEST_SMOKE="${CAPMC_ARR[2]}"
+                         TEST_FUNCTIONAL="${CAPMC_ARR[3]}"
+                         NUM_TESTS_EXPECTED=$((${CAPMC_ARR[2]} + ${CAPMC_ARR[3]}))
+                         FILTER_ARGS="${CAPMC_ARR[4]}" ;;
+        "${FAS_ARR[0]}") TEST_DEPLOYMENT="${FAS_ARR[1]}"
+                         TEST_SMOKE="${FAS_ARR[2]}"
+                         TEST_FUNCTIONAL="${FAS_ARR[3]}"
+                         NUM_TESTS_EXPECTED=$((${FAS_ARR[2]} + ${FAS_ARR[3]}))
+                         FILTER_ARGS="${FAS_ARR[4]}" ;;
+       "${HBTD_ARR[0]}") TEST_DEPLOYMENT="${HBTD_ARR[1]}"
+                         TEST_SMOKE="${HBTD_ARR[2]}"
+                         TEST_FUNCTIONAL="${HBTD_ARR[3]}"
+                         NUM_TESTS_EXPECTED=$((${HBTD_ARR[2]} + ${HBTD_ARR[3]}))
+                         FILTER_ARGS="${HBTD_ARR[4]}" ;;
+      "${HMNFD_ARR[0]}") TEST_DEPLOYMENT="${HMNFD_ARR[1]}"
+                         TEST_SMOKE="${HMNFD_ARR[2]}"
+                         TEST_FUNCTIONAL="${HMNFD_ARR[3]}"
+                         NUM_TESTS_EXPECTED=$((${HMNFD_ARR[2]} + ${HMNFD_ARR[3]}))
+                         FILTER_ARGS="${HMNFD_ARR[4]}" ;;
+        "${HSM_ARR[0]}") TEST_DEPLOYMENT="${HSM_ARR[1]}"
+                         TEST_SMOKE="${HSM_ARR[2]}"
+                         TEST_FUNCTIONAL="${HSM_ARR[3]}"
+                         NUM_TESTS_EXPECTED=$((${HSM_ARR[2]} + ${HSM_ARR[3]}))
+                         FILTER_ARGS="${HSM_ARR[4]}" ;;
+        "${PCS_ARR[0]}") TEST_DEPLOYMENT="${PCS_ARR[1]}"
+                         TEST_SMOKE="${PCS_ARR[2]}"
+                         TEST_FUNCTIONAL="${PCS_ARR[3]}"
+                         NUM_TESTS_EXPECTED=$((${PCS_ARR[2]} + ${PCS_ARR[3]}))
+                         FILTER_ARGS="${PCS_ARR[4]}" ;;
+       "${REDS_ARR[0]}") TEST_DEPLOYMENT="${REDS_ARR[1]}"
+                         TEST_SMOKE="${REDS_ARR[2]}"
+                         TEST_FUNCTIONAL="${REDS_ARR[3]}"
+                         NUM_TESTS_EXPECTED=$((${REDS_ARR[2]} + ${REDS_ARR[3]}))
+                         FILTER_ARGS="${REDS_ARR[4]}" ;;
+       "${SCSD_ARR[0]}") TEST_DEPLOYMENT="${SCSD_ARR[1]}"
+                         TEST_SMOKE="${SCSD_ARR[2]}"
+                         TEST_FUNCTIONAL="${SCSD_ARR[3]}"
+                         NUM_TESTS_EXPECTED=$((${SCSD_ARR[2]} + ${SCSD_ARR[3]}))
+                         FILTER_ARGS="${SCSD_ARR[4]}" ;;
+        "${SLS_ARR[0]}") TEST_DEPLOYMENT="${SLS_ARR[1]}"
+                         TEST_SMOKE="${SLS_ARR[2]}"
+                         TEST_FUNCTIONAL="${SLS_ARR[3]}"
+                         NUM_TESTS_EXPECTED=$((${SLS_ARR[2]} + ${SLS_ARR[3]}))
+                         FILTER_ARGS="${SLS_ARR[4]}";;
             *) print_and_log "ERROR: invalid service: ${TEST_SERVICE}"
                exit 1 ;;
     esac
 
+    NUM_TESTS_PASSED=0
+
     echo "Running ${TEST_SERVICE} tests..."
-    helm test -n services ${TEST_DEPLOYMENT} > ${LOG_PATH} 2>&1
+    if [[ "${FILTER_ARGS}" == "none" ]]; then
+        helm test -n services ${TEST_DEPLOYMENT} > ${LOG_PATH} 2>&1
+    else
+        helm test -n services ${TEST_DEPLOYMENT} --filter ${FILTER_ARGS} > ${LOG_PATH} 2>&1
+    fi
 
     echo "DONE."
 
@@ -282,8 +349,23 @@ else
         print_and_log "ERROR: ${TEST_SERVICE} tests didn't appear to run"
     fi
 
-    # check for pass or fail result
-    NUM_TESTS_PASSED=$(cat "${LOG_PATH}" | grep -E "Phase:.*Succeeded" | wc -l | tr -d " ")
+    # parse smoke test output
+    if [[ ${TEST_SMOKE} -eq 1 ]]; then
+        TEST_SUITE_SMOKE_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/^TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-smoke/,/^Phase:/p')
+        TEST_SUITE_SMOKE_PASS_CHECK=$(echo "${TEST_SUITE_SMOKE_OUTPUT}" | grep -E "Phase:.*Succeeded" | wc -l | tr -d " ")
+        if [[ ${TEST_SUITE_SMOKE_PASS_CHECK} -eq 1 ]]; then
+            ((NUM_TESTS_PASSED++))
+        fi
+    fi
+
+    # parse functional test output
+    if [[ ${TEST_FUNCTIONAL} -eq 1 ]]; then
+        TEST_SUITE_FUNCTIONAL_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/^TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-functional/,/^Phase:/p')
+        TEST_SUITE_FUNCTIONAL_PASS_CHECK=$(echo "${TEST_SUITE_FUNCTIONAL_OUTPUT}" | grep -E "Phase:.*Succeeded" | wc -l | tr -d " ")
+        if [[ ${TEST_SUITE_FUNCTIONAL_PASS_CHECK} -eq 1 ]]; then
+            ((NUM_TESTS_PASSED++))
+        fi
+    fi
 
     # print test results
     if [[ ${NUM_TESTS_PASSED} -eq ${NUM_TESTS_EXPECTED} ]]; then
