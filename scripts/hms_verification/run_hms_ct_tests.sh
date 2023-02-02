@@ -179,6 +179,13 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
         exit 1
     fi
 
+    # check for output from Helm test
+    HELM_OUTPUT_CHECK=$(echo "${ALL_OUTPUT}" | grep -E "TEST SUITE:")
+    if [[ -z "${HELM_OUTPUT_CHECK}" ]]; then
+        print_and_log "ERROR: failed to parse Helm output for test data"
+        exit 1
+    fi
+
     # initialize variables
     SERVICES_PASSED=""
     SERVICES_FAILED=""
@@ -196,26 +203,19 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
         NUM_TESTS_EXPECTED=$((${TEST_SMOKE} + ${TEST_FUNCTIONAL}))
         NUM_TESTS_PASSED=0
 
-        # parse test output
-        TEST_OUTPUT=$(echo "${ALL_OUTPUT}" | sed -n '/^NAME: '${TEST_DEPLOYMENT}'/,/^NAME:/p')
-        LAST_LINE_CHECK=$(echo "${TEST_OUTPUT}" | tail -n 1 | grep "NAME:")
-        if [[ -n "${LAST_LINE_CHECK}" ]]; then
-            TEST_OUTPUT=$(echo "${TEST_OUTPUT}" | sed '$d')
-        fi
-
-        # check for output from Helm test
-        if [[ -z "${TEST_OUTPUT}" ]]; then
-            print_and_log "ERROR: failed to parse output for ${TEST_SERVICE} test data"
-        else
-            COMPLETION_CHECK=$(echo "${TEST_OUTPUT}" | grep -E "Phase:")
-            if [[ -z "${COMPLETION_CHECK}" ]]; then
-                print_and_log "ERROR: ${TEST_SERVICE} tests didn't appear to run"
-            fi
-        fi
-
         # parse smoke test output
         if [[ ${TEST_SMOKE} -eq 1 ]]; then
-            TEST_SUITE_SMOKE_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/^TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-smoke/,/^Phase:/p')
+            TEST_SUITE_SMOKE_OUTPUT=$(echo "${ALL_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-smoke/,/^Phase:/p')
+            if [[ -z "${TEST_SUITE_SMOKE_OUTPUT}" ]]; then
+                print_and_log "ERROR: ${TEST_DEPLOYMENT}-test-smoke tests didn't appear to run"
+            else
+                TEST_SUITE_SMOKE_PARSE_CHECK=$(echo "${TEST_SUITE_SMOKE_OUTPUT}" | grep -E "TEST SUITE:" | wc -l | tr -d " ")
+                if [[ ${TEST_SUITE_SMOKE_PARSE_CHECK} -ne 1 ]]; then
+                    print_and_log "ERROR: failed to parse Helm output for ${TEST_DEPLOYMENT}-test-smoke data"
+                    # ensure invalid data is not processed
+                    TEST_SUITE_SMOKE_OUTPUT=""
+                fi
+            fi
             TEST_SUITE_SMOKE_PASS_CHECK=$(echo "${TEST_SUITE_SMOKE_OUTPUT}" | grep -E "Phase:.*Succeeded" | wc -l | tr -d " ")
             if [[ ${TEST_SUITE_SMOKE_PASS_CHECK} -eq 1 ]]; then
                 ((NUM_TESTS_PASSED++))
@@ -224,7 +224,17 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
 
         # parse functional test output
         if [[ ${TEST_FUNCTIONAL} -eq 1 ]]; then
-            TEST_SUITE_FUNCTIONAL_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/^TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-functional/,/^Phase:/p')
+            TEST_SUITE_FUNCTIONAL_OUTPUT=$(echo "${ALL_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-functional/,/^Phase:/p')
+            if [[ -z "${TEST_SUITE_FUNCTIONAL_OUTPUT}" ]]; then
+                print_and_log "ERROR: ${TEST_DEPLOYMENT}-test-functional tests didn't appear to run"
+            else
+                TEST_SUITE_FUNCTIONAL_PARSE_CHECK=$(echo "${TEST_SUITE_FUNCTIONAL_OUTPUT}" | grep -E "TEST SUITE:" | wc -l | tr -d " ")
+                if [[ ${TEST_SUITE_FUNCTIONAL_PARSE_CHECK} -ne 1 ]]; then
+                    print_and_log "ERROR: failed to parse Helm output for ${TEST_DEPLOYMENT}-test-functional data"
+                    # ensure invalid data is not processed
+                    TEST_SUITE_FUNCTIONAL_OUTPUT=""
+                fi
+            fi
             TEST_SUITE_FUNCTIONAL_PASS_CHECK=$(echo "${TEST_SUITE_FUNCTIONAL_OUTPUT}" | grep -E "Phase:.*Succeeded" | wc -l | tr -d " ")
             if [[ ${TEST_SUITE_FUNCTIONAL_PASS_CHECK} -eq 1 ]]; then
                 ((NUM_TESTS_PASSED++))
@@ -343,15 +353,19 @@ else
         exit 1
     fi
 
-    # check for output from Helm test
-    COMPLETION_CHECK=$(echo "${TEST_OUTPUT}" | grep -E "Phase:")
-    if [[ -z "${COMPLETION_CHECK}" ]]; then
-        print_and_log "ERROR: ${TEST_SERVICE} tests didn't appear to run"
-    fi
-
     # parse smoke test output
     if [[ ${TEST_SMOKE} -eq 1 ]]; then
-        TEST_SUITE_SMOKE_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/^TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-smoke/,/^Phase:/p')
+        TEST_SUITE_SMOKE_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-smoke/,/^Phase:/p')
+        if [[ -z "${TEST_SUITE_SMOKE_OUTPUT}" ]]; then
+            print_and_log "ERROR: ${TEST_DEPLOYMENT}-test-smoke tests didn't appear to run"
+        else
+            TEST_SUITE_SMOKE_PARSE_CHECK=$(echo "${TEST_SUITE_SMOKE_OUTPUT}" | grep -E "TEST SUITE:" | wc -l | tr -d " ")
+            if [[ ${TEST_SUITE_SMOKE_PARSE_CHECK} -ne 1 ]]; then
+                print_and_log "ERROR: failed to parse Helm output for ${TEST_DEPLOYMENT}-test-smoke data"
+                # ensure invalid data is not processed
+                TEST_SUITE_SMOKE_OUTPUT=""
+            fi
+        fi
         TEST_SUITE_SMOKE_PASS_CHECK=$(echo "${TEST_SUITE_SMOKE_OUTPUT}" | grep -E "Phase:.*Succeeded" | wc -l | tr -d " ")
         if [[ ${TEST_SUITE_SMOKE_PASS_CHECK} -eq 1 ]]; then
             ((NUM_TESTS_PASSED++))
@@ -360,7 +374,17 @@ else
 
     # parse functional test output
     if [[ ${TEST_FUNCTIONAL} -eq 1 ]]; then
-        TEST_SUITE_FUNCTIONAL_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/^TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-functional/,/^Phase:/p')
+        TEST_SUITE_FUNCTIONAL_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-functional/,/^Phase:/p')
+        if [[ -z "${TEST_SUITE_FUNCTIONAL_OUTPUT}" ]]; then
+            print_and_log "ERROR: ${TEST_DEPLOYMENT}-test-functional tests didn't appear to run"
+        else
+            TEST_SUITE_FUNCTIONAL_PARSE_CHECK=$(echo "${TEST_SUITE_FUNCTIONAL_OUTPUT}" | grep -E "TEST SUITE:" | wc -l | tr -d " ")
+            if [[ ${TEST_SUITE_FUNCTIONAL_PARSE_CHECK} -ne 1 ]]; then
+                print_and_log "ERROR: failed to parse Helm output for ${TEST_DEPLOYMENT}-test-functional data"
+                # ensure invalid data is not processed
+                TEST_SUITE_FUNCTIONAL_OUTPUT=""
+            fi
+        fi
         TEST_SUITE_FUNCTIONAL_PASS_CHECK=$(echo "${TEST_SUITE_FUNCTIONAL_OUTPUT}" | grep -E "Phase:.*Succeeded" | wc -l | tr -d " ")
         if [[ ${TEST_SUITE_FUNCTIONAL_PASS_CHECK} -eq 1 ]]; then
             ((NUM_TESTS_PASSED++))
