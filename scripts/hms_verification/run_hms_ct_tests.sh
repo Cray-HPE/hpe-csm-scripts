@@ -205,7 +205,7 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
 
         # parse smoke test output
         if [[ ${TEST_SMOKE} -eq 1 ]]; then
-            TEST_SUITE_SMOKE_OUTPUT=$(echo "${ALL_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-smoke/,/^Phase:/p')
+            TEST_SUITE_SMOKE_OUTPUT=$(echo "${ALL_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-smoke/,/Phase:/p')
             if [[ -z "${TEST_SUITE_SMOKE_OUTPUT}" ]]; then
                 print_and_log "ERROR: ${TEST_DEPLOYMENT}-test-smoke tests didn't appear to run"
             else
@@ -224,7 +224,7 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
 
         # parse functional test output
         if [[ ${TEST_FUNCTIONAL} -eq 1 ]]; then
-            TEST_SUITE_FUNCTIONAL_OUTPUT=$(echo "${ALL_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-functional/,/^Phase:/p')
+            TEST_SUITE_FUNCTIONAL_OUTPUT=$(echo "${ALL_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-functional/,/Phase:/p')
             if [[ -z "${TEST_SUITE_FUNCTIONAL_OUTPUT}" ]]; then
                 print_and_log "ERROR: ${TEST_DEPLOYMENT}-test-functional tests didn't appear to run"
             else
@@ -355,7 +355,7 @@ else
 
     # parse smoke test output
     if [[ ${TEST_SMOKE} -eq 1 ]]; then
-        TEST_SUITE_SMOKE_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-smoke/,/^Phase:/p')
+        TEST_SUITE_SMOKE_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-smoke/,/Phase:/p')
         if [[ -z "${TEST_SUITE_SMOKE_OUTPUT}" ]]; then
             print_and_log "ERROR: ${TEST_DEPLOYMENT}-test-smoke tests didn't appear to run"
         else
@@ -374,7 +374,7 @@ else
 
     # parse functional test output
     if [[ ${TEST_FUNCTIONAL} -eq 1 ]]; then
-        TEST_SUITE_FUNCTIONAL_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-functional/,/^Phase:/p')
+        TEST_SUITE_FUNCTIONAL_OUTPUT=$(echo "${TEST_OUTPUT}" | sed -n '/TEST SUITE:.*'${TEST_DEPLOYMENT}'-test-functional/,/Phase:/p')
         if [[ -z "${TEST_SUITE_FUNCTIONAL_OUTPUT}" ]]; then
             print_and_log "ERROR: ${TEST_DEPLOYMENT}-test-functional tests didn't appear to run"
         else
