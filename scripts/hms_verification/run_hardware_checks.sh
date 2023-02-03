@@ -49,8 +49,6 @@ trap 'if [[ -f ${LOG_PATH} ]]; then \
 
 DATE_TIME=$(date +"%Y%m%dT%H%M%S")
 LOG_PATH="/opt/cray/tests/hardware_checks-${DATE_TIME}.log"
-#TODO
-HELP_URL="https://github.com/Cray-HPE/docs-csm/blob/main/troubleshooting/hms_ct_manual_run.md"
 
 # sanity checks
 which helm &> /dev/null
@@ -99,7 +97,5 @@ if [[ ${TEST_SUITE_HW_CHECK_PASS_CHECK} -eq 1 ]]; then
     exit 0
 else
     print_and_log "FAILURE: Hardware checks FAILED"
-    #TODO
-    echo "For troubleshooting and manual steps, see: ${HELP_URL}"
     exit 1
 fi
