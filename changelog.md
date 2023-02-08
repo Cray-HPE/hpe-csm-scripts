@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.6] - 2023-02-03
+### Changed
+- Moved hardware-sensitive CT tests into separate stage.
+
 ## [0.4.5]
 ### Changed
 - The verify_hsm_discovery.py script now properly supports EX2500 cabinets.
