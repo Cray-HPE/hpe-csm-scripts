@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# (C) Copyright 2021-2022 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2021-2023 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -29,7 +29,7 @@ set -eo pipefail
 # set_vars() sets some global variables used throughout the script
 function set_vars() {
   if [[ -z ${USERNAME} ]] || [[ -z ${IPMI_PASSWORD} ]]; then
-    echo "\$USERNAME \$IPMI_PASSWORD must be set"
+    echo "\$USERNAME \$IPMI_PASSWORD must be set and exported"
     exit 1
   fi
   
@@ -38,11 +38,8 @@ function set_vars() {
   # Set the path to our Python API-call helper script
   make_api_call_py=${mydir}/make_api_call.py
   
-  if [[ -z $BMC ]]; then
-    VENDOR="$(ipmitool fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
-  else
-    VENDOR="$(ipmitool -I lanplus -U $USERNAME -E -H $BMC fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
-  fi
+  VENDOR="$(ipmitool -I lanplus -U $USERNAME -E -H $BMC fru | awk '/Board Mfg/ && !/Date/ {print $4}')"
+
   # Export VENDOR variable for use by Python API helper script
   export VENDOR
 
@@ -76,37 +73,51 @@ usage() {
   grep '^#/' "$0" | cut -c4-
 }
 
-#/ Usage: set-bmc-ntp-dns.sh [-h] ilo|gb|intel [-N NTP_SERVERS]|[-D DNS_SERVERS] [-H BMC] [-options]
+# Since we are going through getopts twice, define getopts strings.
+# Define them here, next to the usage statement, to help keep them consistent.
+ILO_GETOPTS=":H:AsZ:tzSD:N:dnrf"
+GB_GETOPTS=":H:AstD:N:dnrf"
+INTEL_GETOPTS=":H:tsD:dr"
+
+#/ Usage: set-bmc-ntp-dns.sh ilo   -H BMC [-A] [-d] [-D DNS_SERVERS] [-f] [-n] [-N NTP_SERVERS]
+#/                                        [-r] [-s] [-S] [-t] [-z] [-Z INDEX]
+#/        set-bmc-ntp-dns.sh gb    -H BMC [-A] [-d] [-D DNS_SERVERS] [-f] [-n] [-N NTP_SERVERS]
+#/                                        [-r] [-s] [-t]
+#/        set-bmc-ntp-dns.sh intel -H BMC [-d] [-D DNS_SERVERS] [-r] [-s] [-t]
+#/        set-bmc-ntp-dns.sh -h
 #/
 #/    Sets static NTP and DNS servers on BMCs using data defined in cloud-init (or by providing manual overrides)
 #/
 #/    $USERNAME and $IPMI_PASSWORD must be set prior to running this script.
 #/
+#/    required:
+#/       [-H]               BMC hostname
 #/
-#/    options common to 'ilo', 'gb', and 'intel' commands:
-#/
-#/       [-A]               configure a BMC, running all the necessary tasks (fresh installs only)
+#/    common options:
 #/       [-s]               shows the current configuration of NTP and DNS
 #/       [-t]               show the current date/time for the BMC
-#/       [-N NTP_SERVERS]   a comma-separated list of NTP servers (manual override when no 1.5 metadata exists)
 #/       [-D DNS_SERVERS]   a comma-separated list of DNS servers (manual override when no 1.5 metadata exists)
 #/       [-d]               sets static DNS servers using cloud-init data or overrides
-#/       [-n]               sets static NTP servers using cloud-init data or overrides (see -S for iLO)
 #/       [-r]               gracefully resets the BMC
-#/       [-f]               forcefully resets the BMC
 #/
-#/    options specific to the the 'ilo' command:
+#/    options for 'ilo':
+#/       [-A]               configure a BMC, running all the necessary tasks (fresh installs only)
+#/       [-f]               forcefully resets the BMC
+#/       [-n]               sets static NTP servers using cloud-init data or overrides (see -S for iLO)
+#/       [-N NTP_SERVERS]   a comma-separated list of NTP servers (manual override when no 1.5 metadata exists)
 #/       [-S]               disables DHCP so static entries can be set
 #/       [-z]               show current timezone
 #/       [-Z INDEX]         set a new timezone
 #/
-#/    options specific to the 'gb' command:
-#/       [-]                yet to be developed
+#/    options for 'gb':
+#/       [-A]               configure a BMC, running all the necessary tasks (fresh installs only)
+#/       [-f]               forcefully resets the BMC
+#/       [-n]               sets static NTP servers using cloud-init data or overrides (see -S for iLO)
+#/       [-N NTP_SERVERS]   a comma-separated list of NTP servers (manual override when no 1.5 metadata exists)
 #/
-#/    options specific to the 'intel' command:
-#/       [-d IP]            IP of the BMC to configure with static DNS
-#/                          *this uses SDPTool, which normally runs from the PIT
-#/                          as it is not included in the image(s)
+#/    options for 'intel':
+#/       [-d]               *this uses SDPTool, which normally runs from the PIT
+#/                          as it is not included in the images
 #/
 #/    EXAMPLES:
 #/
@@ -134,9 +145,6 @@ usage() {
 #/
 #/       Setting just DNS servers (for iLO, DHCP must have been previously disabled):
 #/           set-bmc-ntp-dns.sh gb -d
-#/
-#/       Setting just DNS servers (on Intel, where you need to pass an IP):
-#/           set-bmc-ntp-dns.sh gb -d 10.254.1.12
 #/
 #/       Gracefully resetting the BMC:
 #/           set-bmc-ntp-dns.sh ilo -r
@@ -222,7 +230,7 @@ function show_current_bmc_timezone() {
 
   if [[ "$VENDOR" = *Marvell* ]] || [[ "$VENDOR" = HP* ]] || [[ "$VENDOR" = Hewlett* ]] || [[ "$VENDOR" = *GIGA*BYTE* ]] ; then
 
-        make_api_call "redfish/v1/Managers/${manager}/DateTime" \
+    make_api_call "redfish/v1/Managers/${manager}/DateTime" \
       "GET" null \
       ".TimeZone.Name"
 
@@ -751,143 +759,145 @@ function set_bmc_dns() {
   fi
 }
 
+# BMC argument is required for all options, so unset the variable here (if already
+# set), and then verify that it has been set after the arguments have been parsed.
+unset BMC
+
 # if no arguments are passed, show usage
-if [[ "$#" -eq 0 ]];then
-  echo "No arguments supplied."
-  usage && exit 1
+if [[ $# -eq 0 ]]; then
+    echo "No arguments supplied."
+    usage
+    exit 1
+# if only -h argument is passed, show usage
+elif [[ $# -eq 1 && $1 == "-h" ]]; then
+    usage
+    exit 0
+elif ! command -v jq &> /dev/null ; then
+    echo "jq not found in PATH ($PATH)"
+    exit 1
 fi
-
-if ! command -v jq &> /dev/null
-then
-  echo "jq could not be found in $PATH"
-  exit 1
-fi
-
-while getopts "h" opt; do
-  case ${opt} in
-    h)
-      usage
-      exit 0
-      ;;
-   \? )
-     echo "Invalid option: -$OPTARG" 1>&2
-     exit 1
-     ;;
-  esac
-done
-shift $((OPTIND -1))
-
 
 subcommand="$1"; shift  # Remove command from the argument list
-# Parse options to the install sub command
+
+# First pass parsing arguments -- just parse arguments which set parameters:
+#       -H BMC
+#       [-N NTP_SERVERS]   a comma-separated list of NTP servers (manual override when no 1.5 metadata exists)
+#       [-D DNS_SERVERS]   a comma-separated list of DNS servers (manual override when no 1.5 metadata exists)
+#       [-Z INDEX]         set a new timezone
+
 case "$subcommand" in
   ilo)
-    set_vars
-    while getopts "H:AsZ:tzSD:N:dnrf" opt; do
+    while getopts "${ILO_GETOPTS}" opt; do
       case ${opt} in
-        # user-defined hostname
-        H) BMC="$OPTARG"
-           set_vars
-           ;;
-        A) show_current_bmc_datetime
-           disable_ilo_dhcp
-           set_bmc_dns
-           set_bmc_ntp
-           echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working"
-           ;;
-        Z) TIMEZONE="$OPTARG"
-           set_bmc_timezone
-           ;;
-        t) show_current_bmc_datetime ;;
-        z) show_current_bmc_timezone ;;
-        s) show_current_bmc_settings ;;
-        S) disable_ilo_dhcp ;;
-        D) DNS_SERVERS="$OPTARG"
-           ;;
-        N) NTP_SERVERS="$OPTARG"
-           ;;
-        d) set_bmc_dns ;;
-        n) set_bmc_ntp ; echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working" ;;
-        r) reset_bmc_manager ;;
-        f) reset_bmc_manager all-force;;
-        \?)
-          echo "Invalid Option: -$OPTARG" 1>&2
-          exit 1
-          ;;
-        :)
-          echo "Invalid Option: -$OPTARG requires an argument" 1>&2
-          exit 1
-          ;;
+        H)  BMC="$OPTARG" ;;
+        Z)  TIMEZONE="$OPTARG" ;;
+        D)  DNS_SERVERS="$OPTARG" ;;
+        N)  NTP_SERVERS="$OPTARG" ;;
+        \?) usage ; echo "Invalid Option: -$OPTARG" 1>&2 ; exit 1 ;;
+        :)  usage ; echo "Invalid Option: -$OPTARG requires an argument" 1>&2 ; exit 1 ;;
+      esac
+    done
+    ;;
+  # GIGABYTE-specific flags
+  gb)
+    while getopts "${GB_GETOPTS}" opt; do
+      case ${opt} in
+        H)  BMC="$OPTARG" ;;
+        D)  DNS_SERVERS="$OPTARG" ;;
+        N)  NTP_SERVERS="$OPTARG" ;;
+        \?) usage ; echo "Invalid Option: -$OPTARG" 1>&2 ; exit 1 ;;
+        :)  usage ; echo "Invalid Option: -$OPTARG requires an argument" 1>&2 ; exit 1 ;;
+      esac
+    done
+    ;;
+  # Intel-specific flags
+  intel)
+    while getopts "${INTEL_GETOPTS}" opt; do
+      case ${opt} in
+        H)  BMC="$OPTARG" ;;
+        D)  DNS_SERVERS="$OPTARG" ;;
+        \?) usage ; echo "Invalid Option: -$OPTARG" 1>&2 ; exit 1 ;;
+        :)  usage ; echo "Invalid Option: -$OPTARG requires an argument" 1>&2 ; exit 1 ;;
+      esac
+    done
+    ;;
+  *)
+    usage ; echo "Unknown vendor: $subcommand" ; exit 1 ;;
+esac
+
+if [[ -z ${BMC} ]]; then
+    usage
+    echo "ERROR: -H flag is required"
+    exit 1
+fi
+
+# Set variables based on above parsing
+set_vars
+
+# Now parse the arguments a second time, this time carrying out the specified actions (and ignoring the
+# data already parsed above
+
+# Reset OPTIND to 1 so that getopts will begin parsing at the beginning of the argument list
+OPTIND=1
+
+case "$subcommand" in
+  ilo)
+    while getopts "${ILO_GETOPTS}" opt; do
+      case ${opt} in
+        A)  show_current_bmc_datetime
+            disable_ilo_dhcp
+            set_bmc_dns
+            set_bmc_ntp
+            echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working" ;;
+        Z)  set_bmc_timezone ;;
+        t)  show_current_bmc_datetime ;;
+        z)  show_current_bmc_timezone ;;
+        s)  show_current_bmc_settings ;;
+        S)  disable_ilo_dhcp ;;
+        d)  set_bmc_dns ;;
+        n)  set_bmc_ntp ; echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working" ;;
+        r)  reset_bmc_manager ;;
+        f)  reset_bmc_manager all-force;;
+        \?) usage ; echo "Invalid Option: -$OPTARG" 1>&2 ; exit 1 ;;
+        :)  usage ; echo "Invalid Option: -$OPTARG requires an argument" 1>&2 ; exit 1 ;;
       esac
     done
     shift $((OPTIND -1))
     ;;
   # GIGABYTE-specific flags
   gb)
-    set_vars
-    while getopts "H:AstD:N:dnrf" opt; do
+    while getopts "${GB_GETOPTS}" opt; do
       case ${opt} in
-        # user-defined hostname
-        H) BMC="$OPTARG"
-           set_vars
-           ;;
-        A) show_current_bmc_settings
-           set_bmc_dns
-           set_bmc_ntp
-           echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working"
-           ;;
-        t) show_current_bmc_datetime ;;
-        s) show_current_bmc_settings ;;
-        D) DNS_SERVERS="$OPTARG"
-           ;;
-        N) NTP_SERVERS="$OPTARG"
-           ;;
-        d) set_bmc_dns ;;
-        n) set_bmc_ntp ; echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working" ;;
-        r) reset_bmc_manager ;;
-        f) reset_bmc_manager all-force;;
-        \?)
-          echo "Invalid Option: -$OPTARG" 1>&2
-          exit 1
-          ;;
-        :)
-          echo "Invalid Option: -$OPTARG requires an argument" 1>&2
-          exit 1
-          ;;
+        A)  show_current_bmc_settings
+            set_bmc_dns
+            set_bmc_ntp
+            echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working" ;;
+        t)  show_current_bmc_datetime ;;
+        s)  show_current_bmc_settings ;;
+        d)  set_bmc_dns ;;
+        n)  set_bmc_ntp ; echo "Run 'chronyc clients' on ncn-m001 to validate that NTP on the BMC is working" ;;
+        r)  reset_bmc_manager ;;
+        f)  reset_bmc_manager all-force;;
+        \?) usage ; echo "Invalid Option: -$OPTARG" 1>&2 ; exit 1 ;;
+        :)  usage ; echo "Invalid Option: -$OPTARG requires an argument" 1>&2 ; exit 1 ;;
       esac
     done
     shift $((OPTIND -1))
     ;;
   # Intel-specific flags
   intel)
-    set_vars
-    while getopts "H:tsD:dnr" opt; do
+    while getopts "${INTEL_GETOPTS}" opt; do
       case ${opt} in
-        # user-defined hostname
-        H) BMC="$OPTARG"
-           set_vars
-           ;;
-        t) show_current_bmc_datetime ;;
-        s) show_current_bmc_settings ;;
-        D) DNS_SERVERS="$OPTARG"
-           ;;
-        d) set_bmc_dns ;;
-        n) echo "Invalid Option: -n not supported for Intel" 1>&2 ; exit 1 ;;
-        r) reset_bmc_manager ;;
-        \?)
-          echo "Invalid Option: -$OPTARG" 1>&2
-          exit 1
-          ;;
-        :)
-          echo "Invalid Option: -$OPTARG requires an argument" 1>&2
-          exit 1
-          ;;
+        t)  show_current_bmc_datetime ;;
+        s)  show_current_bmc_settings ;;
+        d)  set_bmc_dns ;;
+        r)  reset_bmc_manager ;;
+        \?) usage ; echo "Invalid Option: -$OPTARG" 1>&2 ; exit 1 ;;
+        :)  usage ; echo "Invalid Option: -$OPTARG requires an argument" 1>&2 ; exit 1 ;;
       esac
     done
     shift $((OPTIND -1))
     ;;
   *)
-    echo "Unknown vendor"
-    exit 1
-    ;;
+    usage ; echo "Unknown vendor: $subcommand" ; exit 1 ;;
 esac
