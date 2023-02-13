@@ -2,7 +2,7 @@
 
 # MIT License
 # 
-# (C) Copyright [2022] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2022-2023] Hewlett Packard Enterprise Development LP
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -87,13 +87,13 @@ HELP_URL="https://github.com/Cray-HPE/docs-csm/blob/main/troubleshooting/hms_ct_
 # parse command-line options
 while getopts "hlt:" opt; do
     case ${opt} in
-        h) echo "run_hms_ct_tests.sh is a test utility for hms services"
+        h) echo "run_hms_ct_tests.sh is a test utility for HMS services"
            echo
            echo "Usage: run_hms_ct_tests.sh [-h] [-l] [-t <service>]"
            echo
            echo "Arguments:"
            echo "    -h        display this help message"
-           echo "    -l        list the hms services to test"
+           echo "    -l        list the HMS services to test"
            echo "    -t        test the specified service, must be one of:"
            echo "                  all ${ALL_SERVICES}"
            exit 0

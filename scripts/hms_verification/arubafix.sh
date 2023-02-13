@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# (C) Copyright 2021-2022 Hewlett Packard Enterprise Development LP
+# (C) Copyright 2021-2023 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -25,7 +25,7 @@
 # The bug: SNMP doesn't always report all MAC addr entries, so HMS discovery
 # job reports it as not found.  So no idea which leaf switch should have it.
 # Thus: the SNMP reset has to be applied to all leaf switches, to be sure.
-# One way to figger out the switch that needs the fix -- use the mgmt interface
+# One way to figure out the switch that needs the fix -- use the mgmt interface
 # to look for the MAC, using e.g. 'ssh sw-leaf-001 show mac-address-table'.
 # If MAC is found in that table, that is the one that needs to be reset.
 # This may be a future enhancement.
@@ -39,13 +39,13 @@ debugLevel=0
 testMode=0
 
 resetSNMP() {
-	swname=$1
+    swname=$1
 
-	echo "Performing SNMP Reset on Aruba leaf switch: ${swname}"
-	echo " "
-	expLog=/tmp/swreset_exp_${swname}.out
+    echo "Performing SNMP Reset on Aruba leaf switch: ${swname}"
+    echo " "
+    expLog=/tmp/swreset_exp_${swname}.out
 
- 	expect -c "
+    expect -c "
 spawn ssh admin@${swname}
 expect \"password: \"
 send \"${SWPW}\n\"
@@ -63,54 +63,54 @@ expect \"# \"
 send \"exit\n\"
 " > $expLog 2>&1
 
-	if [ $? -ne 0 ]; then
-		echo "Communication with $swname failed."
-		echo " "
-		echo "Communication log:"
-		echo " "
-		cat $expLog
-		echo " "
-		return 1
-	else
-		echo "Aruba switch $swname SNMP reset succeeded."
-	fi
+    if [ $? -ne 0 ]; then
+        echo "Communication with $swname failed."
+        echo " "
+        echo "Communication log:"
+        echo " "
+        cat $expLog
+        echo " "
+        return 1
+    else
+        echo "Aruba switch $swname SNMP reset succeeded."
+    fi
 
-	if (( debugLevel > 0 )); then
-		cat $expLog
-	fi
+    if (( debugLevel > 0 )); then
+        cat $expLog
+    fi
 
-	return 0
+    return 0
 }
 
 usage() {
-	echo "Usage: `basename $0` [-h] [-d] [-t]"
-	echo " "
-	echo "   -h    Help text"
-	echo "   -d    Print debug info during execution."
-	echo "   -t    Test mode, don't touch Aruba switches."
-	echo " "
+    echo "Usage: `basename $0` [-h] [-d] [-t]"
+    echo " "
+    echo "   -h    Help text"
+    echo "   -d    Print debug info during execution."
+    echo "   -t    Test mode, don't touch Aruba switches."
+    echo " "
 }
 
 
 ### ENTRY POINT
 
 while getopts "hdt" opt; do
-	case "${opt}" in
-		h)
-			usage
-			exit 0
-			;;
-		d)
-			(( debugLevel = debugLevel + 1 ))
-			;;
-		t)
-			testMode=1
-			;;
-		*)
-			usage
-			exit 0
-			;;
-	esac
+    case "${opt}" in
+        h)
+            usage
+            exit 0
+            ;;
+        d)
+            (( debugLevel = debugLevel + 1 ))
+            ;;
+        t)
+            testMode=1
+            ;;
+        *)
+            usage
+            exit 0
+            ;;
+    esac
 done
 
 ## Get a list of Aruba leaf switches.  If there are none, nothing to do.
@@ -122,14 +122,14 @@ swJSON="/tmp/sw.JSON"
 cray sls search hardware list --type comptype_mgmt_switch --format json > $swJSON
 
 if [ $? -ne 0 ]; then
-	echo " "
-	echo "ERROR executing SLS switch HW search:"
-	cat $swJSON
-	echo " "
-	echo "For troubleshooting and manual steps, see ${HELP_URL}."
-	echo " "
-	echo "Exiting..."
-	exit 1
+    echo " "
+    echo "ERROR executing SLS switch HW search:"
+    cat $swJSON
+    echo " "
+    echo "For troubleshooting and manual steps, see ${HELP_URL}."
+    echo " "
+    echo "Exiting..."
+    exit 1
 fi
 
 echo " "
@@ -138,15 +138,15 @@ echo "==> Fetching switch hostnames..."
 swNames=$(cat $swJSON | jq '.[] | select((.Class == "River") and (.ExtraProperties.Brand == "Aruba"))' | jq '.ExtraProperties.Aliases[0]' | sed 's/"//g')
 
 if (( debugLevel > 0 )); then
-	echo "Switches found:"
-	echo $swNames
-	echo " "
+    echo "Switches found:"
+    echo $swNames
+    echo " "
 fi
 
 if [[ "${swNames}" == "" ]]; then
-	echo " "
-	echo "No Aruba switches found, nothing to do, exiting."
-	exit 0
+    echo " "
+    echo "No Aruba switches found, nothing to do, exiting."
+    exit 0
 fi
 
 
@@ -158,29 +158,29 @@ fi
 #    until it is.
 
 for (( iter = 1; iter <= 30; iter = iter + 1 )); do
-	if (( iter == 1 )); then
-		echo "==> Looking for completed HMS discovery pod..."
-	else
-		echo "==> Looking for completed HMS discovery pod, attempt #${iter}..."
-	fi
+    if (( iter == 1 )); then
+        echo "==> Looking for completed HMS discovery pod..."
+    else
+        echo "==> Looking for completed HMS discovery pod, attempt #${iter}..."
+    fi
 
-	HMS_DISCOVERY_POD=$(kubectl -n services get pods -l app=hms-discovery | tail -n 1 | grep Completed | awk '{ print $1 }')
-	if [[ "${HMS_DISCOVERY_POD}" != "" ]]; then
-		break
-	fi
-	sleep 5
+    HMS_DISCOVERY_POD=$(kubectl -n services get pods -l app=hms-discovery | tail -n 1 | grep Completed | awk '{ print $1 }')
+    if [[ "${HMS_DISCOVERY_POD}" != "" ]]; then
+        break
+    fi
+    sleep 5
 done
 
 if [[ "${HMS_DISCOVERY_POD}" == "" ]]; then
-	echo "ERROR: No valid HMS discovery pod found; discovery in progress? Exiting."
-	echo " "
-	echo "For troubleshooting and manual steps, see ${HELP_URL}."
-	echo " "
-	exit 1
+    echo "ERROR: No valid HMS discovery pod found; discovery in progress? Exiting."
+    echo " "
+    echo "For troubleshooting and manual steps, see ${HELP_URL}."
+    echo " "
+    exit 1
 fi
 
 if (( debugLevel > 0 )); then
-	echo "Most recent HMS discover pod: $HMS_DISCOVERY_POD"
+    echo "Most recent HMS discover pod: $HMS_DISCOVERY_POD"
 fi
 
 kubectl -n services logs $HMS_DISCOVERY_POD -c hms-discovery > $DISCOVERY_LOG 2>&1
@@ -194,16 +194,16 @@ echo " "
 UNKNOWN_MACS=$(cat $DISCOVERY_LOG | jq 'select(.msg == "MAC address in HSM not found in any switch!").unknownComponent.ID' -r -c)
 
 if (( debugLevel > 0 )); then
-	echo "Unknown MACs:"
-	echo "$UNKNOWN_MACS"
+    echo "Unknown MACs:"
+    echo "$UNKNOWN_MACS"
 fi
 
 if [[ "${UNKNOWN_MACS}" == "" ]]; then
-	echo "No unknown/undiscovered MACs found;"
-	echo "no Aruba issue on this system, exiting."
-	exit 0
+    echo "No unknown/undiscovered MACs found;"
+    echo "no Aruba issue on this system, exiting."
+    exit 0
 else
-	echo "Found unknown/undiscovered MACs in discovery log."
+    echo "Found unknown/undiscovered MACs in discovery log."
 fi
 
 # 3. Use the logs to get MAC addrs of ones found on the switches (but not 
@@ -214,8 +214,8 @@ echo "==> Looking for unknown/undiscovered MAC addrs in discovery log..."
 FOUND_IN_SWITCH_MACS=$(cat $DISCOVERY_LOG | jq 'select(.msg == "Found MAC address in switch.").macWithoutPunctuation' -r)
 
 if (( debugLevel > 0 )); then
-	echo "MACS in switches:"
-	echo "$FOUND_IN_SWITCH_MACS"
+    echo "MACS in switches:"
+    echo "$FOUND_IN_SWITCH_MACS"
 fi
 
 # 4. Do a diff to match the 2 sets.  Any MACs not found in both indicate
@@ -225,7 +225,7 @@ echo " "
 echo "==> Identifying undiscovered MAC mismatches..."
 echo " "
 if (( debugLevel > 1 )); then
-	diff -y <(echo "$UNKNOWN_MACS" | sort -u) <(echo "$FOUND_IN_SWITCH_MACS" \
+    diff -y <(echo "$UNKNOWN_MACS" | sort -u) <(echo "$FOUND_IN_SWITCH_MACS" \
         | sort -u)
 fi
 
@@ -235,43 +235,43 @@ hasbadmac=$?
 rslt=0
 
 if [ $hasbadmac -ne 0 ]; then
-	# We need another check if there are mismatches.  It's possible some of them
-	# are from another network that we don't care  about.
+    # We need another check if there are mismatches.  It's possible some of them
+    # are from another network that we don't care about.
 
-	suspectMACs=$(diff -y <(echo "$UNKNOWN_MACS" | sort -u) <(echo "$FOUND_IN_SWITCH_MACS" \
+    suspectMACs=$(diff -y <(echo "$UNKNOWN_MACS" | sort -u) <(echo "$FOUND_IN_SWITCH_MACS" \
         | sort -u) | grep -e '<' -e '|' | awk '{printf("%s\n",$1)}')
 
 
-	for mac in ${suspectMACs}; do
-		if (( debugLevel > 1 )); then
-			echo "Unknown MAC: .${mac}."
-		fi
+    for mac in ${suspectMACs}; do
+        if (( debugLevel > 1 )); then
+            echo "Unknown MAC: .${mac}."
+        fi
 
-		# Get IP
-		ip=$(cat $DISCOVERY_LOG | jq "select(.unknownComponent.ID == \"${mac}\") | .unknownComponent.IPAddress" | sed 's/"//g')
+        # Get IP
+        ip=$(cat $DISCOVERY_LOG | jq "select(.unknownComponent.ID == \"${mac}\") | .unknownComponent.IPAddress" | sed 's/"//g')
 
-		NW=$(cray sls search networks list --ip-address $ip --format json | jq .[].Name | sed 's/"//g')
+        NW=$(cray sls search networks list --ip-address $ip --format json | jq .[].Name | sed 's/"//g')
 
-		if (( debugLevel > 1 )); then
-			echo "Unknown MAC's IP: ${ip}, network: ${NW}."
-		fi
+        if (( debugLevel > 1 )); then
+            echo "Unknown MAC's IP: ${ip}, network: ${NW}."
+        fi
 
-		#Ignore networks that are not one of "HMN", "HMN_RVR", or "HMN_MTN"
+        #Ignore networks that are not one of "HMN", "HMN_RVR", or "HMN_MTN"
     #shellcheck disable=SC2166
-		if [ "${NW}" == "HMN" -o "${NW}" == "HMN_RVR" -o "${NW}" == "HMN_MTN" ]; then
-			rslt=1
-			break
-		else
-			echo "INFO: Unknown MAC: ${mac} is on non-relevant network: ${NW}, ignoring."
-		fi
-	done
+        if [ "${NW}" == "HMN" -o "${NW}" == "HMN_RVR" -o "${NW}" == "HMN_MTN" ]; then
+            rslt=1
+            break
+        else
+            echo "INFO: Unknown MAC: ${mac} is on non-relevant network: ${NW}, ignoring."
+        fi
+    done
 fi
 
 if [[ $rslt == 0 ]]; then
-	echo "============================"
-	echo "= No Aruba MAC mismatches. ="
-	echo "============================"
-	exit 0
+    echo "============================"
+    echo "= No Aruba MAC mismatches. ="
+    echo "============================"
+    exit 0
 fi
 
 ## If we got here, we have a discovery problem.  We need to delete the SNMP
@@ -292,9 +292,9 @@ echo "= Performing switch SNMP resets.           ="
 echo "============================================"
 
 if (( testMode != 0 )); then
-	echo " "
-	echo "[Test mode, not acting on Aruba switches.]"
-	exit 0
+    echo " "
+    echo "[Test mode, not acting on Aruba switches.]"
+    exit 0
 fi
 
 
@@ -311,22 +311,21 @@ echo " "
 
 ok=1
 for mswitch in ${swNames}; do
-	resetSNMP $mswitch
-	if [ $? -ne 0 ]; then
-		ok=0
-	fi
-	
+    resetSNMP $mswitch
+    if [ $? -ne 0 ]; then
+        ok=0
+    fi
+    
 done
 
 if (( ok != 1 )); then
-	echo " "
-	echo "Some Aruba switches did not get SNMP reset, Exiting..."
-	echo " "
-	echo "For troubleshooting and manual steps, see ${HELP_URL}."
-	echo " "
-	exit 1
+    echo " "
+    echo "Some Aruba switches did not get SNMP reset, Exiting..."
+    echo " "
+    echo "For troubleshooting and manual steps, see ${HELP_URL}."
+    echo " "
+    exit 1
 fi
 
 echo " "
 exit 0
-
