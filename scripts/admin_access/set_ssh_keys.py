@@ -2,7 +2,7 @@
 
 # MIT License
 #
-# (C) Copyright [2021] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2021, 2023] Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -33,7 +33,7 @@ dryrun = False
 debugLevel = 0
 
 
-# Create a k8s client object for use in getting auth tokena.
+# Create a k8s client object for use in getting auth tokens.
 
 def getK8sClient():
 	config.load_kube_config()
@@ -347,6 +347,3 @@ def main():
 if __name__ == "__main__":
 	ret = main()
 	exit(ret)
-
-
-
