@@ -2,7 +2,7 @@
 
 # MIT License
 #
-# (C) Copyright [2021-2022] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2021-2023] Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -174,7 +174,7 @@ function timestamp_print()
 # initialize test variables
 TARGET="api-gw-service-nmn.local"
 
-trap ">&2 echo \"recieved kill signal, exiting with status of '1'...\" ; \
+trap ">&2 echo \"received kill signal, exiting with status of '1'...\" ; \
     exit 1" SIGHUP SIGINT SIGTERM
 
 # check for jq dependency

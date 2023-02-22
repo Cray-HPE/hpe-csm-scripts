@@ -8,7 +8,7 @@ Hence the need for an automated way to check if this issue is affecting
 the system and if so to fix it.
 
 Note that this script is not 100% automated -- it does require user input.
-That input is the switch management software's admin password.   Without this
+That input is the switch management software's admin password.  Without this
 the commands to fix the SNMP issue cannot be executed on the switch(es).
 Since passwords cannot be coded in any way into any application source code,
 this is the only way to handle this situation.
