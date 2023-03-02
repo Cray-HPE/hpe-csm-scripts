@@ -1,6 +1,18 @@
 # Changelog
 
-## [0.4.6] - 2023-02-03
+## [0.5.3] - 2023-03-02
+### Changed
+- Move CAPMC get_power_cap_capabilities test into hardware checks stage.
+
+## [0.5.2] - 2023-02-22
+### Changed
+- Linting of minor language and formatting errors.
+
+## [0.5.1] - 2023-02-10
+### Changed
+- Improved argument parsing for set-bmc-ntp-dns.sh.
+
+## [0.5.0] - 2023-02-03
 ### Changed
 - Moved hardware-sensitive CT tests into separate stage.
 
