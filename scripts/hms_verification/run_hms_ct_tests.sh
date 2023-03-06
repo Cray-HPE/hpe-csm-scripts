@@ -55,7 +55,7 @@ trap 'if [[ -f ${LOG_PATH} ]]; then \
 
 # service name, helm deployment, smoke tests bool, functional tests bool, helm filter args
 BSS_ARR=("bss" "cray-hms-bss" 1 1 "none")
-CAPMC_ARR=("capmc" "cray-hms-capmc" 1 1 "none")
+CAPMC_ARR=("capmc" "cray-hms-capmc" 1 1 "name=cray-hms-capmc-test-smoke,name=cray-hms-capmc-test-functional")
 FAS_ARR=("fas" "cray-hms-firmware-action" 1 1 "none")
 HBTD_ARR=("hbtd" "cray-hms-hbtd" 1 0 "none")
 HMNFD_ARR=("hmnfd" "cray-hms-hmnfd" 1 0 "none")
