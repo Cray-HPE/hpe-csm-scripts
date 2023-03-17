@@ -45,6 +45,17 @@ function print_and_log()
     fi
 }
 
+# print_failed_pod_logs
+function print_failed_pod_logs()
+{
+    # gather list of failed HMS test pods
+    FAILED_PODS=$(kubectl -n services get pods | grep -E "test-smoke|test-functional" | grep -E -i "Error" | awk '{print $1}')
+    for POD in ${FAILED_PODS}; do
+        echo; echo "Printing pod logs for ${POD}..."
+        kubectl -n services logs ${POD}
+    done
+}
+
 # set up signal handling
 trap 'if [[ -f ${LOG_PATH} ]]; then \
           echo Received kill signal, exiting with status code: 1 | tee -a ${LOG_PATH}; \
@@ -89,22 +100,25 @@ ${SLS_ARR[0]}"
 
 # default behavior is to run all hms tests
 TEST_SERVICE="all"
+PRINT_POD_LOGS=false
 DATE_TIME=$(date +"%Y%m%dT%H%M%S")
 LOG_PATH="/opt/cray/tests/hms_ct_test-${DATE_TIME}.log"
 HELP_URL="https://github.com/Cray-HPE/docs-csm/blob/main/troubleshooting/hms_ct_manual_run.md"
 
 # parse command-line options
-while getopts "hlt:" opt; do
+while getopts "hlt:p" opt; do
     case ${opt} in
         h) echo "run_hms_ct_tests.sh is a test utility for HMS services"
            echo
-           echo "Usage: run_hms_ct_tests.sh [-h] [-l] [-t <service>]"
+           echo "Usage: run_hms_ct_tests.sh [-h] [-l] [-t <service>] [-p]"
            echo
            echo "Arguments:"
            echo "    -h        display this help message"
            echo "    -l        list the HMS services that can be tested"
            echo "    -t        test the specified service, must be one of:"
            echo "                  all ${ALL_SERVICES}"
+           echo "    -p        print pod logs of failed tests to stdout"
+           echo "                  Warning: output is verbose"
            exit 0
            ;;
         l) echo "${ALL_SERVICES}"
@@ -131,6 +145,8 @@ while getopts "hlt:" opt; do
                    ;;
            esac
            ;;
+        p) PRINT_POD_LOGS=true
+           ;;
         ?) exit 1
            ;;
     esac
@@ -149,9 +165,21 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
+if ${PRINT_POD_LOGS}; then
+    which kubectl &> /dev/null
+    if [[ $? -ne 0 ]]; then
+        echo "ERROR: kubectl command missing, can't print pod logs"
+        PRINT_POD_LOGS=false
+    fi
+fi
+
 echo "Log file for run is: ${LOG_PATH}"
 
 if [[ ${TEST_SERVICE} == "all" ]]; then
+    #############################
+    # Run all HMS service tests #
+    #############################
+
     NUM_TEST_SERVICES=0
     echo "Running all tests..."
     for i in $(seq 0 5 $((${#ALL_ARR[@]} - 1))); do
@@ -266,17 +294,27 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
     elif [[ ${NUM_SERVICES_PASSED} -eq 0 ]]; then
         print_and_log "FAILURE: All ${NUM_TEST_SERVICES} service tests FAILED: ${SERVICES_FAILED}"
         echo "For troubleshooting and manual steps, see: ${HELP_URL}"
+        if ${PRINT_POD_LOGS}; then
+            print_failed_pod_logs
+        fi
         exit 1
     else
-        if [[ ${NUM_SERVICES_FAILED} -eq 1 ]] ; then
+        if [[ ${NUM_SERVICES_FAILED} -eq 1 ]]; then
             print_and_log "FAILURE: ${NUM_SERVICES_FAILED} service test FAILED (${SERVICES_FAILED}), ${NUM_SERVICES_PASSED} passed (${SERVICES_PASSED})"
         else
             print_and_log "FAILURE: ${NUM_SERVICES_FAILED} service tests FAILED (${SERVICES_FAILED}), ${NUM_SERVICES_PASSED} passed (${SERVICES_PASSED})"
         fi
         echo "For troubleshooting and manual steps, see: ${HELP_URL}"
+        if ${PRINT_POD_LOGS}; then
+            print_failed_pod_logs
+        fi
         exit 1
     fi
 else
+    #################################
+    # Run tests for one HMS service #
+    #################################
+
     # data for service being tested
     case ${TEST_SERVICE} in
         # services may or may not have smoke tests, functional tests, and helm filter arguments
@@ -398,6 +436,9 @@ else
     else
         print_and_log "FAILURE: Service test FAILED: ${TEST_SERVICE}"
         echo "For troubleshooting and manual steps, see: ${HELP_URL}"
+        if ${PRINT_POD_LOGS}; then
+            print_failed_pod_logs
+        fi
         exit 1
     fi
 fi
