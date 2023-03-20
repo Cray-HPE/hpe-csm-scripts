@@ -1,8 +1,12 @@
 # Changelog
 
+## [0.5.4] - 2023-03-20
+### Changed
+- Added option to print failed pod logs to HMS CT test wrapper.
+
 ## [0.5.3] - 2023-03-02
 ### Changed
-- Move CAPMC get_power_cap_capabilities test into hardware checks stage.
+- Moved CAPMC get_power_cap_capabilities test into hardware checks stage.
 
 ## [0.5.2] - 2023-02-22
 ### Changed
