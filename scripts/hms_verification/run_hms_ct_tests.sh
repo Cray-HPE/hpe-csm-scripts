@@ -45,14 +45,24 @@ function print_and_log()
     fi
 }
 
-# print_failed_pod_logs
+# print_failed_pod_logs <pod_filter_arg>
 function print_failed_pod_logs()
 {
+    if [[ -z "${1}" ]] || [[ "${1}" == "all" ]]; then
+        POD_FILTER="test-smoke|test-functional"
+    else
+        POD_FILTER="${1}-test-smoke|${1}-test-functional"
+    fi
+
     # gather list of failed HMS test pods
-    FAILED_PODS=$(kubectl -n services get pods | grep -E "test-smoke|test-functional" | grep -E -i "Error" | awk '{print $1}')
+    FAILED_PODS=$(kubectl -n services get pods | grep -E "${POD_FILTER}" | awk '{print $1}')
+
+    # print the failed pod logs
     for POD in ${FAILED_PODS}; do
-        echo; echo "Printing pod logs for ${POD}..."
+        echo
+        echo "Printing pod logs for ${POD}..."
         kubectl -n services logs ${POD}
+        echo
     done
 }
 
@@ -295,7 +305,7 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
         print_and_log "FAILURE: All ${NUM_TEST_SERVICES} service tests FAILED: ${SERVICES_FAILED}"
         echo "For troubleshooting and manual steps, see: ${HELP_URL}"
         if ${PRINT_POD_LOGS}; then
-            print_failed_pod_logs
+            print_failed_pod_logs "all"
         fi
         exit 1
     else
@@ -306,7 +316,7 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
         fi
         echo "For troubleshooting and manual steps, see: ${HELP_URL}"
         if ${PRINT_POD_LOGS}; then
-            print_failed_pod_logs
+            print_failed_pod_logs "all"
         fi
         exit 1
     fi
@@ -437,7 +447,7 @@ else
         print_and_log "FAILURE: Service test FAILED: ${TEST_SERVICE}"
         echo "For troubleshooting and manual steps, see: ${HELP_URL}"
         if ${PRINT_POD_LOGS}; then
-            print_failed_pod_logs
+            print_failed_pod_logs "${TEST_DEPLOYMENT}"
         fi
         exit 1
     fi
