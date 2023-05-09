@@ -4,7 +4,6 @@
 ### Changed
 - Removed BGP script.
 - Removed Aruba SNMP scripts.
-- Remove dns_records.py script.
 
 ## [0.5.4] - 2023-03-20
 ### Changed
