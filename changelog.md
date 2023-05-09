@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.5] - 2023-05-03
+### Changed
+- Removed BGP script.
+- Removed Aruba SNMP scripts.
+
 ## [0.5.4] - 2023-03-20
 ### Changed
 - Added option to print failed pod logs to HMS CT test wrapper.
