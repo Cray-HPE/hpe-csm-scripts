@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.6.0] - 2023-07-05
+### Changed
+- Added HMNFD Tavern tests to HMS CT test wrapper.
+
 ## [0.5.4] - 2023-03-20
 ### Changed
 - Added option to print failed pod logs to HMS CT test wrapper.
