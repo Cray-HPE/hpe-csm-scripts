@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.6.0] - 2023-07-05
+### Changed
+- Added HMNFD Tavern tests to HMS CT test wrapper.
+
 ## [0.5.5] - 2023-05-03
 ### Changed
 - Removed BGP script.
