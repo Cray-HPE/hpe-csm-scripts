@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.6.1] - 2023-07-28
+### Changed
+- Added check for vShasta to run_hms_ct_tests.sh
+
 ## [0.6.0] - 2023-07-05
 ### Changed
 - Added HMNFD Tavern tests to HMS CT test wrapper.
