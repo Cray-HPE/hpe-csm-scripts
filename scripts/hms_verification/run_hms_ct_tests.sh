@@ -28,6 +28,18 @@
 # charts for HMS services are configured to only run non-disruptive tests since
 # they are executed during installs and upgrades in the CSM health validation steps.
 
+
+# is_vshasta_node
+function is_vshasta_node {
+    # This is the best check for an image specifically booted to vshasta
+    [[ -f /etc/google_system ]] && return 0
+
+    # metal images can still be booted on GCP, so check if there are any disks vendored by Google
+    # if not, we conclude that this is not GCP
+    lsblk --noheadings -o vendor | grep -q Google
+    return $?
+}
+
 # print_and_log <string>
 function print_and_log()
 {
@@ -194,6 +206,12 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
     echo "Running all tests..."
     for i in $(seq 0 5 $((${#ALL_ARR[@]} - 1))); do
         TEST_DEPLOYMENT=${ALL_ARR[$((${i} + 1))]}
+        if [[ "$TEST_DEPLOYMENT" == "cray-hms-reds" ]]; then
+            if is_vshasta_node; then
+                print_and_log "SKIPPED: ${TEST_DEPLOYMENT} test, running in vShasta"
+                continue
+            fi
+        fi
         FILTER_ARGS=${ALL_ARR[$((${i} + 4))]}
         if [[ "${FILTER_ARGS}" == "none" ]]; then
             helm test -n services ${TEST_DEPLOYMENT} >> ${LOG_PATH} 2>&1 &
@@ -235,6 +253,11 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
         # data for service being tested
         TEST_SERVICE=${ALL_ARR[${i}]}
         TEST_DEPLOYMENT=${ALL_ARR[$((${i} + 1))]}
+        if [[ "$TEST_DEPLOYMENT" == "cray-hms-reds" ]]; then
+            if is_vshasta_node; then
+                continue
+            fi
+        fi
         TEST_SMOKE=${ALL_ARR[$((${i} + 2))]}
         TEST_FUNCTIONAL=${ALL_ARR[$((${i} + 3))]}
         # some services only have smoke tests, others also have functional tests
@@ -381,6 +404,13 @@ else
             *) print_and_log "ERROR: invalid service: ${TEST_SERVICE}"
                exit 1 ;;
     esac
+
+    if [[ "$TEST_DEPLOYMENT" == "cray-hms-reds" ]]; then
+        if is_vshasta_node; then
+            print_and_log "SKIPPED: ${TEST_DEPLOYMENT} test, running in vShasta"
+            exit 0
+        fi
+    fi
 
     NUM_TESTS_PASSED=0
 
