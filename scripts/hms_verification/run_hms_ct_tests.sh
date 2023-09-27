@@ -94,7 +94,6 @@ HBTD_ARR=("hbtd" "cray-hms-hbtd" 1 0 "none")
 HMNFD_ARR=("hmnfd" "cray-hms-hmnfd" 1 1 "none")
 HSM_ARR=("hsm" "cray-hms-smd" 1 1 "name=cray-hms-smd-test-smoke,name=cray-hms-smd-test-functional")
 PCS_ARR=("pcs" "cray-power-control" 1 1 "none")
-REDS_ARR=("reds" "cray-hms-reds" 1 0 "none")
 SCSD_ARR=("scsd" "cray-hms-scsd" 1 0 "none")
 SLS_ARR=("sls" "cray-hms-sls" 1 1 "none")
 
@@ -105,7 +104,6 @@ ALL_ARR=("${BSS_ARR[@]}" \
 "${HMNFD_ARR[@]}" \
 "${HSM_ARR[@]}" \
 "${PCS_ARR[@]}" \
-"${REDS_ARR[@]}" \
 "${SCSD_ARR[@]}" \
 "${SLS_ARR[@]}")
 
@@ -116,7 +114,6 @@ ${HBTD_ARR[0]} \
 ${HMNFD_ARR[0]} \
 ${HSM_ARR[0]} \
 ${PCS_ARR[0]} \
-${REDS_ARR[0]} \
 ${SCSD_ARR[0]} \
 ${SLS_ARR[0]}"
 
@@ -155,7 +152,6 @@ while getopts "hlt:p" opt; do
                "${HMNFD_ARR[0]}" | \
                "${HSM_ARR[0]}" | \
                "${PCS_ARR[0]}" | \
-               "${REDS_ARR[0]}" | \
                "${SCSD_ARR[0]}" | \
                "${SLS_ARR[0]}")
                    TEST_SERVICE=${OPTARG}
@@ -206,12 +202,6 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
     echo "Running all tests..."
     for i in $(seq 0 5 $((${#ALL_ARR[@]} - 1))); do
         TEST_DEPLOYMENT=${ALL_ARR[$((${i} + 1))]}
-        if [[ "$TEST_DEPLOYMENT" == "cray-hms-reds" ]]; then
-            if is_vshasta_node; then
-                print_and_log "SKIPPED: ${TEST_DEPLOYMENT} test, running in vShasta"
-                continue
-            fi
-        fi
         FILTER_ARGS=${ALL_ARR[$((${i} + 4))]}
         if [[ "${FILTER_ARGS}" == "none" ]]; then
             helm test -n services ${TEST_DEPLOYMENT} >> ${LOG_PATH} 2>&1 &
@@ -253,11 +243,6 @@ if [[ ${TEST_SERVICE} == "all" ]]; then
         # data for service being tested
         TEST_SERVICE=${ALL_ARR[${i}]}
         TEST_DEPLOYMENT=${ALL_ARR[$((${i} + 1))]}
-        if [[ "$TEST_DEPLOYMENT" == "cray-hms-reds" ]]; then
-            if is_vshasta_node; then
-                continue
-            fi
-        fi
         TEST_SMOKE=${ALL_ARR[$((${i} + 2))]}
         TEST_FUNCTIONAL=${ALL_ARR[$((${i} + 3))]}
         # some services only have smoke tests, others also have functional tests
@@ -386,11 +371,6 @@ else
                          TEST_FUNCTIONAL="${PCS_ARR[3]}"
                          NUM_TESTS_EXPECTED=$((${PCS_ARR[2]} + ${PCS_ARR[3]}))
                          FILTER_ARGS="${PCS_ARR[4]}" ;;
-       "${REDS_ARR[0]}") TEST_DEPLOYMENT="${REDS_ARR[1]}"
-                         TEST_SMOKE="${REDS_ARR[2]}"
-                         TEST_FUNCTIONAL="${REDS_ARR[3]}"
-                         NUM_TESTS_EXPECTED=$((${REDS_ARR[2]} + ${REDS_ARR[3]}))
-                         FILTER_ARGS="${REDS_ARR[4]}" ;;
        "${SCSD_ARR[0]}") TEST_DEPLOYMENT="${SCSD_ARR[1]}"
                          TEST_SMOKE="${SCSD_ARR[2]}"
                          TEST_FUNCTIONAL="${SCSD_ARR[3]}"
@@ -404,13 +384,6 @@ else
             *) print_and_log "ERROR: invalid service: ${TEST_SERVICE}"
                exit 1 ;;
     esac
-
-    if [[ "$TEST_DEPLOYMENT" == "cray-hms-reds" ]]; then
-        if is_vshasta_node; then
-            print_and_log "SKIPPED: ${TEST_DEPLOYMENT} test, running in vShasta"
-            exit 0
-        fi
-    fi
 
     NUM_TESTS_PASSED=0
 
