@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.0] - 2023-09-25
+
+### Changed
+- Removed REDS from run_hms_ct_tests.sh
+
 ## [0.6.1] - 2023-07-28
 ### Changed
 - Added check for vShasta to run_hms_ct_tests.sh
