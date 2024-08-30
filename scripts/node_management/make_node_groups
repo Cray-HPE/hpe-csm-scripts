@@ -32,7 +32,7 @@ list_hsm_nodes() {
 
 list_uai_nodes() {
     kubectl get nodes \
-            --selector "uas notin (false, False, FALSE),! node-role.kubernetes.io/master" \
+            --selector "uas notin (false, False, FALSE),! node-role.kubernetes.io/control-plane" \
         | grep -v -e '^NAME ' \
         | awk '{ print $1 }'
 }
