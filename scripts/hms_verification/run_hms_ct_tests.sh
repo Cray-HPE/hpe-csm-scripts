@@ -124,7 +124,8 @@ ${SLS_ARR[0]}"
 TEST_SERVICE="all"
 PRINT_POD_LOGS=false
 DATE_TIME=$(date +"%Y%m%dT%H%M%S")
-LOG_PATH="/opt/cray/tests/hms_ct_test-${DATE_TIME}.log"
+LOG_BASE_DIR="/opt/cray/tests"
+LOG_PATH="$LOG_BASE_DIR/hms_ct_test-${DATE_TIME}.log"
 HELP_URL="https://github.com/Cray-HPE/docs-csm/blob/main/troubleshooting/hms_ct_manual_run.md"
 
 # parse command-line options
@@ -195,9 +196,10 @@ if ${PRINT_POD_LOGS}; then
     fi
 fi
 
-echo "Log file for run is: ${LOG_PATH}"
 
 if [[ ${TEST_SERVICE} == "all" ]]; then
+    echo "Log file for run is: ${LOG_PATH}"
+    
     #############################
     # Run all HMS service tests #
     #############################
@@ -391,7 +393,7 @@ else
                          TEST_FUNCTIONAL="${REDS_ARR[3]}"
                          NUM_TESTS_EXPECTED=$((${REDS_ARR[2]} + ${REDS_ARR[3]}))
                          FILTER_ARGS="${REDS_ARR[4]}" ;;
-       "${SCSD_ARR[0]}") TEST_DEPLOYMENT="${SCSD_ARR[1]}"
+        "${SCSD_ARR[0]}") TEST_DEPLOYMENT="${SCSD_ARR[1]}"
                          TEST_SMOKE="${SCSD_ARR[2]}"
                          TEST_FUNCTIONAL="${SCSD_ARR[3]}"
                          NUM_TESTS_EXPECTED=$((${SCSD_ARR[2]} + ${SCSD_ARR[3]}))
@@ -415,6 +417,11 @@ else
     NUM_TESTS_PASSED=0
 
     echo "Running ${TEST_SERVICE} tests..."
+    # when executed in parallel, writing to the same log file causes unintended failures when parsing the output
+    # create a new file with the service name and timestamp to avoid this issue
+    LOG_PATH=$(mktemp "$LOG_BASE_DIR/hms_ct_test-${DATE_TIME}-${TEST_SERVICE}-XXXXXX.log")
+    echo "Log file for run is: ${LOG_PATH}"
+
     if [[ "${FILTER_ARGS}" == "none" ]]; then
         helm test -n services ${TEST_DEPLOYMENT} > ${LOG_PATH} 2>&1
     else
